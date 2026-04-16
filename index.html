@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Estrellitas</title>
     <style>
-        /* Variables modo oscuro/claro automático */
         :root {
             --bg-gradient: linear-gradient(135deg, #0a0f1e, #0f172a);
             --card-bg: rgba(30, 41, 59, 0.9);
@@ -34,10 +33,7 @@
             .dashboard-card, .historial-item, .tarea, .nino-item, .card {
                 color: #1e293b;
             }
-            input, select, textarea {
-                color: #1e293b;
-                background: #f1f5f9;
-            }
+            input, select, textarea { color: #1e293b; background: #f1f5f9; }
         }
         body {
             background: var(--bg-gradient);
@@ -50,11 +46,7 @@
             justify-content: center;
             align-items: center;
         }
-        .container {
-            max-width: 700px;
-            width: 100%;
-            margin: 0 auto;
-        }
+        .container { max-width: 700px; width: 100%; margin: 0 auto; }
         .card {
             background: var(--card-bg);
             backdrop-filter: blur(4px);
@@ -75,14 +67,8 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        button:hover, .tab:hover {
-            background: var(--btn-hover);
-            transform: scale(0.97);
-        }
-        .tab-active {
-            background: #4f46e5;
-            box-shadow: 0 4px 10px rgba(79,70,229,0.4);
-        }
+        button:hover, .tab:hover { background: var(--btn-hover); transform: scale(0.97); }
+        .tab-active { background: #4f46e5; box-shadow: 0 4px 10px rgba(79,70,229,0.4); }
         .nino-buttons {
             display: flex;
             flex-wrap: wrap;
@@ -90,7 +76,6 @@
             justify-content: center;
             margin-bottom: 1rem;
         }
-        /* Estrella principal con brillo y mensaje */
         .estrella-principal {
             background: linear-gradient(145deg, var(--card-bg), var(--input-bg));
             border-radius: 2rem;
@@ -104,10 +89,7 @@
             box-shadow: var(--estrella-glow);
             border: 1px solid rgba(250,204,21,0.3);
         }
-        .puntos-area {
-            text-align: center;
-            flex: 1;
-        }
+        .puntos-area { text-align: center; flex: 1; }
         .puntos {
             font-size: 4rem;
             font-weight: 800;
@@ -131,9 +113,7 @@
             transition: transform 0.2s;
             animation: flotar 2s infinite ease;
         }
-        .mascota:hover {
-            transform: scale(1.1);
-        }
+        .mascota:hover { transform: scale(1.1); }
         @keyframes flotar {
             0% { transform: translateY(0px); }
             50% { transform: translateY(-6px); }
@@ -211,19 +191,9 @@
             overflow: hidden;
             margin: 0.5rem 0;
         }
-        .barra-fill {
-            background: #facc15;
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s;
-        }
-        @keyframes girar {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .girando {
-            animation: girar 0.5s ease-in-out;
-        }
+        .barra-fill { background: #facc15; height: 100%; width: 0%; transition: width 0.3s; }
+        @keyframes girar { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .girando { animation: girar 0.5s ease-in-out; }
         @media (max-width: 550px) {
             .dashboard-grid { grid-template-columns: repeat(2,1fr); }
             .puntos { font-size: 2.5rem; }
@@ -253,18 +223,10 @@
     const db = firebase.firestore();
 
     // ---------- ESTADO ----------
-    let currentUser = null;
-    let currentUserData = null;
-    let isAdmin = false;
-    let esModoJuego = false;
-    let pantalla = 'tareas';
-    let ninos = [];
-    let ninoSeleccionado = null;
-    let tareas = [];
-    let premios = [];
-    let chartInstance = null;
+    let currentUser = null, currentUserData = null, isAdmin = false, esModoJuego = false;
+    let pantalla = 'tareas', ninos = [], ninoSeleccionado = null, tareas = [], premios = [], chartInstance = null;
 
-    // Sonidos
+    // Sonidos (Web Audio)
     function playSound(type) {
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -295,16 +257,14 @@
         }
     }
 
-    // Fecha Colombia (UTC-5) - versión corregida para evitar desfases
+    // Fecha Colombia (UTC-5) corregida
     function getFechaColombia() {
         const ahora = new Date();
         const colombiaOffset = -5 * 60;
         const localOffset = ahora.getTimezoneOffset();
         const diff = colombiaOffset - localOffset;
-        const colombiaDate = new Date(ahora.getTime() + diff * 60 * 1000);
-        return colombiaDate;
+        return new Date(ahora.getTime() + diff * 60 * 1000);
     }
-
     function getFechaStrColombia(fecha = null) {
         const date = fecha ? new Date(fecha) : getFechaColombia();
         const colombiaOffset = -5 * 60;
@@ -343,11 +303,7 @@
     function ordenarPremios() { premios.sort((a,b) => b.costo - a.costo); }
     async function cargarConfiguracion() {
         const configDoc = await db.collection('configuracion').doc('estrellitas').get();
-        if (configDoc.exists) {
-            const data = configDoc.data();
-            tareas = data.tareas || [];
-            premios = data.premios || [];
-        }
+        if (configDoc.exists) { const d = configDoc.data(); tareas = d.tareas || []; premios = d.premios || []; }
         if (tareas.length === 0) {
             tareas = [
                 { id: 1, nombre: "📚 Leer 15 min", puntos: 10 },
@@ -382,7 +338,7 @@
         await db.collection('global').doc('datos').set({ ninos });
     }
 
-    // Recalcular estadísticas, logros, mascota
+    // Recalcular estadísticas, logros, mascota (más niveles)
     function recalcularStats(nino) {
         let ganado = 0, perdido = 0, canjeado = 0, reconocimiento = 0, actual = 0;
         let diasConPuntos = new Set();
@@ -401,7 +357,7 @@
                 }
             }
         }
-        // Racha actual usando fechas Colombia
+        // Racha actual
         const hoyStr = getFechaStrColombia();
         let racha = 0;
         let fechaCursor = new Date(getFechaColombia());
@@ -430,11 +386,12 @@
         if (nino.goldenTickets >= 5) logros.push("🎫 Coleccionista de Golden Tickets");
         nino.logros = logros;
         
-        // Mascota
+        // Mascota con más niveles
         if (ganado < 100) nino.mascota = "🐣";
         else if (ganado < 300) nino.mascota = "🐥";
         else if (ganado < 600) nino.mascota = "🦊";
-        else nino.mascota = "🦄";
+        else if (ganado < 1000) nino.mascota = "🦄";
+        else nino.mascota = "🐉";
         
         return nino;
     }
@@ -525,19 +482,20 @@
         render();
     }
 
-    // ---------- RULETA (visible en modo juego también) ----------
+    // ---------- RULETA MEJORADA (con flecha fija, más vueltas, mensajes personalizados) ----------
     let ruletaAngulo = 0;
     let ruletaGirando = false;
 
+    // Segmentos con grosores ajustados (más proporcionados)
     const segmentosRuleta = [
         { texto: "0⭐", puntos: 0, peso: 1, color: "#ef4444", tipo: "cero" },
         { texto: "0⭐", puntos: 0, peso: 1, color: "#ef4444", tipo: "cero" },
-        { texto: "+50⭐", puntos: 50, peso: 0.8, color: "#ec489a", tipo: "puntos" },
-        { texto: "🎫 Ticket", puntos: 0, peso: 1.2, color: "#a855f7", tipo: "ticket" },
+        { texto: "+50⭐", puntos: 50, peso: 1, color: "#ec489a", tipo: "puntos" },
+        { texto: "🎫 Ticket", puntos: 0, peso: 1.5, color: "#a855f7", tipo: "ticket" },
         { texto: "🔄 Otra vez", puntos: 0, peso: 2, color: "#f59e0b", tipo: "replay" },
-        { texto: "+20⭐", puntos: 20, peso: 2, color: "#10b981", tipo: "puntos" },
-        { texto: "+10⭐", puntos: 10, peso: 3, color: "#3b82f6", tipo: "puntos" },
-        { texto: "+10⭐", puntos: 10, peso: 3, color: "#3b82f6", tipo: "puntos" }
+        { texto: "+20⭐", puntos: 20, peso: 2.5, color: "#10b981", tipo: "puntos" },
+        { texto: "+10⭐", puntos: 10, peso: 2.5, color: "#3b82f6", tipo: "puntos" },
+        { texto: "+10⭐", puntos: 10, peso: 2.5, color: "#3b82f6", tipo: "puntos" }
     ];
 
     function dibujarRuleta(ctx, width, height, anguloActual) {
@@ -557,7 +515,7 @@
             ctx.translate(centerX, centerY);
             ctx.rotate(start + anguloSegmento / 2);
             ctx.fillStyle = '#fff';
-            ctx.font = `bold ${Math.max(10, radius / 12)}px "Segoe UI"`;
+            ctx.font = `bold ${Math.max(12, radius / 11)}px "Segoe UI"`;
             let textoMostrar = s.texto;
             if (s.texto === "🎫 Ticket") textoMostrar = "🎫";
             else if (s.texto === "🔄 Otra vez") textoMostrar = "🔄";
@@ -565,12 +523,21 @@
             ctx.restore();
             anguloAcumulado = end;
         }
+        // Flecha indicadora fija (fuera del canvas, pero la dibujamos arriba)
         ctx.beginPath();
-        ctx.moveTo(centerX + radius + 10, centerY);
-        ctx.lineTo(centerX + radius + 20, centerY - 8);
-        ctx.lineTo(centerX + radius + 20, centerY + 8);
+        ctx.moveTo(centerX + radius + 12, centerY);
+        ctx.lineTo(centerX + radius + 22, centerY - 8);
+        ctx.lineTo(centerX + radius + 22, centerY + 8);
         ctx.fillStyle = '#facc15';
         ctx.fill();
+        // Círculo central
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+        ctx.fillStyle = '#facc15';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText("⭐", centerX-7, centerY+5);
     }
 
     function girarRuletaVisual() {
@@ -588,24 +555,28 @@
         const ctx = canvas.getContext('2d');
         const width = canvas.width, height = canvas.height;
         
-        const vueltas = 5 + Math.random() * 5;
+        // Más vueltas (8 a 12) y duración más larga (2.5 segundos)
+        const vueltas = 8 + Math.random() * 5;
         const anguloFinal = ruletaAngulo + (vueltas * Math.PI * 2);
-        const duracion = 1800;
+        const duracion = 2500;
         const startTime = performance.now();
         const startAngulo = ruletaAngulo;
         
         function animar(ahora) {
             const elapsed = ahora - startTime;
             let t = Math.min(1, elapsed / duracion);
-            t = 1 - Math.pow(1 - t, 3);
+            // easing más suave
+            t = 1 - Math.pow(1 - t, 2.5);
             const anguloActual = startAngulo + (anguloFinal - startAngulo) * t;
             ruletaAngulo = anguloActual;
             dibujarRuleta(ctx, width, height, anguloActual);
             if (t < 1) {
                 requestAnimationFrame(animar);
             } else {
+                // Determinar segmento
                 const totalPeso = segmentosRuleta.reduce((sum, s) => sum + s.peso, 0);
-                let anguloRelativo = (ruletaAngulo + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+                // La flecha está arriba (ángulo -PI/2)
+                let anguloRelativo = (ruletaAngulo + Math.PI/2 + Math.PI * 2) % (Math.PI * 2);
                 let anguloAcum = 0;
                 let idx = -1;
                 for (let i = 0; i < segmentosRuleta.length; i++) {
@@ -620,56 +591,62 @@
                 const resultado = segmentosRuleta[idx];
                 ruletaGirando = false;
                 
+                // Mensaje personalizado según resultado
+                let mensaje = "";
+                let sonido = null;
                 if (!esModoJuegoLocal) {
                     agregarHistorial(`🎡 Ruleta: giró (costo 5⭐)`, -5);
                 }
                 
                 if (resultado.tipo === "puntos" && resultado.puntos > 0) {
+                    mensaje = `🎉 ¡Felicidades! Ganaste ${resultado.texto} ⭐`;
                     if (!esModoJuegoLocal) {
                         agregarHistorial(`🎉 Ruleta: ${resultado.texto}`, resultado.puntos);
-                        mostrar(`¡${resultado.texto} para ${ninoSeleccionado.nombre}!`);
-                        playSound('puntos');
+                        sonido = 'puntos';
                     } else {
-                        mostrar(`🎉 ¡Modo juego: ${resultado.texto}! (no se guarda)`);
+                        mensaje = `🎉 Modo juego: ${resultado.texto} (no se guarda)`;
                     }
                 } 
                 else if (resultado.tipo === "replay") {
+                    mensaje = `🔄 ¡Gira otra vez! Sigue así.`;
                     if (!esModoJuegoLocal) {
-                        mostrar(`🔄 ¡Gira otra vez! (sin costo adicional)`);
                         setTimeout(() => girarRuletaVisual(), 500);
                     } else {
-                        mostrar(`🔄 Modo juego: gira otra vez`);
+                        mensaje = `🔄 Modo juego: gira otra vez`;
                         setTimeout(() => girarRuletaVisual(), 500);
                     }
                 }
                 else if (resultado.tipo === "ticket") {
+                    mensaje = `🎫 ¡Golden Ticket! Acumula 5 y canjea cualquier premio gratis.`;
                     if (!esModoJuegoLocal) {
                         if (!ninoSeleccionado.goldenTickets) ninoSeleccionado.goldenTickets = 0;
                         ninoSeleccionado.goldenTickets++;
                         agregarHistorial(`🎫 Golden Ticket conseguido (total: ${ninoSeleccionado.goldenTickets})`, 0);
-                        mostrar(`🎫 ¡Golden Ticket! Llevas ${ninoSeleccionado.goldenTickets}. Con 5 puedes canjear cualquier premio gratis.`);
                         if (ninoSeleccionado.goldenTickets >= 5) {
-                            mostrar(`✨ ¡Tienes 5 Golden Tickets! Ve a la pestaña Premios y canjea lo que quieras sin gastar ⭐.`, true);
+                            mensaje += " ¡Ya tienes 5! Ve a Premios.";
                         }
-                        playSound('logro');
+                        sonido = 'logro';
                     } else {
-                        mostrar(`🎫 Modo juego: ¡Golden Ticket! (no se acumula en la realidad)`);
+                        mensaje = `🎫 Modo juego: Golden Ticket (no acumulable)`;
                     }
                 }
                 else {
+                    mensaje = `😅 No ganaste esta vez. ¡Sigue con buen comportamiento y tendrás más oportunidades!`;
                     if (!esModoJuegoLocal) {
-                        mostrar(`${resultado.texto}... ¡suerte la próxima!`);
+                        // sin puntos
                     } else {
-                        mostrar(`Modo juego: ${resultado.texto}`);
+                        mensaje = `Modo juego: ${resultado.texto}`;
                     }
                 }
+                mostrar(mensaje, true);
+                if (sonido) playSound(sonido);
                 render();
             }
         }
         requestAnimationFrame(animar);
     }
 
-    // Calendario con zona horaria Colombia corregida
+    // Calendario con zona horaria Colombia
     function renderCalendario() {
         if (!ninoSeleccionado) return "<p>Selecciona un niño</p>";
         const hoyCol = getFechaColombia();
@@ -696,7 +673,7 @@
         return html;
     }
 
-    // Meta (restaurada)
+    // Meta
     async function seleccionarMeta(premioId) {
         if (!ninoSeleccionado) return;
         ninoSeleccionado.metaPremioId = premioId;
@@ -870,7 +847,6 @@
         if (ninoSeleccionado) {
             const stats = ninoSeleccionado;
             html += `<div class="nino-buttons">${ninos.map(n => `<button class="tab ${ninoSeleccionado?.id === n.id ? 'tab-active' : ''}" onclick="seleccionarNino('${n.id}')">${n.avatar || '👶'} ${n.nombre} (${n.puntos || 0}⭐)</button>`).join('')}</div>`;
-            // Nuevo diseño con mensaje motivador
             const mensajes = ["✨ ¡Sigue brillando!", "⭐ Cada estrella cuenta", "🏆 Tú puedes lograrlo", "🌈 Buen trabajo", "🎯 Meta alcanzable"];
             const mensajeAleatorio = mensajes[Math.floor(Math.random() * mensajes.length)];
             html += `<div class="estrella-principal">
@@ -890,7 +866,6 @@
                      </div>`;
         } else html += `<div class="card">No hay niños. ${isAdmin ? 'Agrega uno en Niños.' : 'Contacta admin.'}</div>`;
 
-        // Pestañas (incluyendo Ruleta siempre visible y Meta solo en modo juego)
         html += `<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:16px 0;">
                     <button class="tab ${pantalla === 'tareas' ? 'tab-active' : ''}" onclick="pantalla='tareas';render()">⭐ Tareas</button>
                     <button class="tab ${pantalla === 'premios' ? 'tab-active' : ''}" onclick="pantalla='premios';render()">🎁 Premios</button>
@@ -956,7 +931,7 @@
             html += `</ul></div>`;
         }
 
-        // Meta (restaurada)
+        // Meta
         if (pantalla === 'meta' && ninoSeleccionado && esModoJuego) {
             const metaId = ninoSeleccionado.metaPremioId;
             const premioMeta = metaId ? premios.find(p => p.id === metaId) : null;
@@ -982,7 +957,7 @@
         if (pantalla === 'ruleta' && ninoSeleccionado) {
             html += `<div class="card">
                         <h3>🎡 Ruleta de Premios</h3>
-                        <p>${!esModoJuego ? "Cuesta 5⭐ girar. " : "Modo juego: solo diversión, no afecta tus puntos. "}¡Puedes ganar hasta 50⭐ extra!</p>
+                        <p>${!esModoJuego ? "Cuesta 5⭐ girar. " : "Modo juego: solo diversión, no afecta tus puntos. "}¡Gira y gana hasta 50⭐ extra!</p>
                         <canvas id="canvasRuleta" width="300" height="300" style="margin: 0 auto; display: block; max-width: 100%; height: auto; background: #1e293b; border-radius: 50%;"></canvas>
                         <button id="girarRuletaBtn" class="ruleta-btn" style="margin-top: 1rem;">🎲 Girar ruleta</button>
                         <p style="margin-top: 0.5rem;">Tienes ${ninoSeleccionado.puntos || 0}⭐ | Golden Tickets: ${ninoSeleccionado.goldenTickets || 0}</p>
@@ -1012,7 +987,7 @@
         document.getElementById('logout-btn').onclick = () => { if (esModoJuego) { esModoJuego = false; currentUser = null; renderLogin(); } else auth.signOut().then(() => location.reload()); };
         const quitarCustom = document.getElementById('quitar-custom'); if (quitarCustom) quitarCustom.onclick = () => quitarPuntos(parseInt(document.getElementById('cantidad-custom').value) || 1, document.getElementById('motivo-custom').value || 'Otro');
         
-        // Ruleta visual (siempre disponible)
+        // Ruleta
         if (pantalla === 'ruleta' && ninoSeleccionado) {
             const canvas = document.getElementById('canvasRuleta');
             if (canvas) {
