@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Estrellitas - Fase 1</title>
+    <title>Estrellitas</title>
     <style>
-        /* Variables para modo oscuro/claro automático */
+        /* Variables modo oscuro/claro automático */
         :root {
             --bg-gradient: linear-gradient(135deg, #0a0f1e, #0f172a);
             --card-bg: rgba(30, 41, 59, 0.9);
@@ -49,7 +49,7 @@
             align-items: center;
         }
         .container {
-            max-width: 650px;
+            max-width: 700px;
             width: 100%;
             margin: 0 auto;
         }
@@ -88,6 +88,21 @@
             justify-content: center;
             margin-bottom: 1rem;
         }
+        .estrella-principal {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            background: var(--card-bg);
+            border-radius: 2rem;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .puntos-area {
+            text-align: center;
+            flex: 1;
+        }
         .puntos {
             font-size: 4rem;
             font-weight: 800;
@@ -96,6 +111,21 @@
             background-clip: text;
             color: transparent;
             margin: 0;
+        }
+        .mascota {
+            font-size: 4rem;
+            cursor: pointer;
+            filter: drop-shadow(0 0 8px #facc15);
+            transition: transform 0.2s;
+            animation: flotar 2s infinite ease;
+        }
+        .mascota:hover {
+            transform: scale(1.1);
+        }
+        @keyframes flotar {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+            100% { transform: translateY(0px); }
         }
         .dashboard-grid {
             display: grid;
@@ -144,11 +174,51 @@
             justify-content: space-between;
             text-align: left;
         }
+        .calendario {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            margin-top: 1rem;
+        }
+        .dia-calendario {
+            background: var(--input-bg);
+            border-radius: 0.8rem;
+            text-align: center;
+            padding: 0.4rem;
+            font-size: 0.7rem;
+        }
+        .ruleta-btn {
+            background: #f59e0b;
+            font-size: 1.2rem;
+            padding: 0.8rem 2rem;
+        }
+        .barra-progreso {
+            background: var(--input-bg);
+            border-radius: 1rem;
+            height: 1.2rem;
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+        .barra-fill {
+            background: #facc15;
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        @keyframes girar {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .girando {
+            animation: girar 0.5s ease-in-out;
+        }
         @media (max-width: 550px) {
             .dashboard-grid { grid-template-columns: repeat(2,1fr); }
             .puntos { font-size: 2.5rem; }
+            .mascota { font-size: 2.5rem; }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -170,7 +240,7 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
 
-    // ---------- ESTADO GLOBAL ----------
+    // ---------- ESTADO ----------
     let currentUser = null;
     let currentUserData = null;
     let isAdmin = false;
@@ -180,6 +250,7 @@
     let ninoSeleccionado = null;
     let tareas = [];
     let premios = [];
+    let chartInstance = null;
 
     // Sonidos (Web Audio)
     function playSound(type) {
@@ -212,7 +283,7 @@
         }
     }
 
-    // Fecha Colombia
+    // Fecha Colombia (UTC-5)
     function getFechaColombia() {
         const now = new Date();
         const colombiaOffset = -5 * 60;
@@ -222,7 +293,7 @@
         return colombiaDate.toISOString().split('T')[0];
     }
 
-    // Reconocimiento por usuario (limitado a 1 vez al día por tipo)
+    // Reconocimiento por usuario (1 vez al día por tipo)
     function getUsuarioId() { return esModoJuego ? 'modoJuego' : (currentUser ? currentUser.uid : 'anonimo'); }
     async function reconocimientoUsadoHoyGlobal(cantidad) {
         const hoy = getFechaColombia();
@@ -240,6 +311,11 @@
         if (usuario === 'modoJuego') localStorage.setItem(`reco_${cantidad}`, hoy);
         else if (usuario !== 'anonimo') await db.collection('reconocimientosDiarios').doc(`${usuario}_${cantidad}`).set({ fecha: hoy, cantidad });
     }
+
+    // Tareas recurrentes predefinidas
+    const tareasRecurrentesDef = [
+        { id: "cepillado", nombre: "🦷 Cepillarse los dientes", puntosPorVez: 2, maxPorDia: 3 }
+    ];
 
     // Orden y config
     function ordenarTareas() { tareas.sort((a,b) => b.puntos - a.puntos); }
@@ -285,7 +361,7 @@
         await db.collection('global').doc('datos').set({ ninos });
     }
 
-    // Recalcular estadísticas incluyendo racha
+    // Recalcular estadísticas, logros, mascota
     function recalcularStats(nino) {
         let ganado = 0, perdido = 0, canjeado = 0, reconocimiento = 0, actual = 0;
         let diasConPuntos = new Set();
@@ -304,7 +380,7 @@
                 }
             }
         }
-        // Calcular racha actual (días consecutivos hasta hoy)
+        // Racha actual
         const hoy = getFechaColombia();
         let fechaCursor = new Date(hoy);
         let racha = 0;
@@ -321,6 +397,23 @@
         nino.puntos = Math.max(0, actual);
         nino.rachaActual = racha;
         nino.mejorRacha = Math.max(nino.mejorRacha || 0, racha);
+        
+        // Logros (insignias)
+        let logros = [];
+        if (ganado >= 100) logros.push("🏅 100 puntos ganados");
+        if (ganado >= 500) logros.push("🏆 500 puntos ganados");
+        if (reconocimiento >= 10) logros.push("👍🏻 10 reconocimientos");
+        if (racha >= 5) logros.push("🔥 Racha de 5 días");
+        if (racha >= 10) logros.push("⚡ Racha de 10 días");
+        if (nino.historial && nino.historial.length >= 50) logros.push("📜 50 acciones registradas");
+        nino.logros = logros;
+        
+        // Mascota según puntos totales ganados
+        if (ganado < 100) nino.mascota = "🐣";
+        else if (ganado < 300) nino.mascota = "🐥";
+        else if (ganado < 600) nino.mascota = "🦊";
+        else nino.mascota = "🦄";
+        
         return nino;
     }
 
@@ -334,12 +427,13 @@
             timestamp: Date.now()
         };
         ninoSeleccionado.historial = [entrada, ...(ninoSeleccionado.historial || []).slice(0, 199)];
+        const oldLogros = ninoSeleccionado.logros ? ninoSeleccionado.logros.length : 0;
         recalcularStats(ninoSeleccionado);
-        await guardarDatosNino();
-        // Sonido según el tipo
-        if (cambio > 0) playSound('puntos');
+        const newLogros = ninoSeleccionado.logros.length;
+        if (newLogros > oldLogros) playSound('logro');
+        else if (cambio > 0) playSound('puntos');
         else if (esCanje) playSound('canje');
-        else playSound('puntos');
+        await guardarDatosNino();
         render();
     }
 
@@ -381,43 +475,114 @@
         render();
     }
 
-    // CRUD Niños
-    async function agregarNino(nombre, avatar) {
-        if (!nombre) return mostrar("Nombre requerido", false);
-        const nuevo = {
-            id: Date.now().toString(),
-            nombre: nombre.trim(),
-            avatar: avatar || "👶",
-            puntos: 0, totalGanado: 0, totalPerdido: 0, totalCanjeado: 0, totalReconocimiento: 0,
-            historial: [], metaPremioId: null, mejorRacha: 0
-        };
-        ninos.push(nuevo);
-        await db.collection('ninios').doc(nuevo.id).set(nuevo);
-        await db.collection('global').doc('datos').set({ ninos });
-        if (!ninoSeleccionado) ninoSeleccionado = nuevo;
+    // Tarea recurrente (checkbox)
+    async function toggleTareaRecurrente(tareaId) {
+        if (!ninoSeleccionado) return;
+        const hoy = getFechaColombia();
+        if (!ninoSeleccionado.tareasRecurrentes) ninoSeleccionado.tareasRecurrentes = {};
+        if (!ninoSeleccionado.tareasRecurrentes[tareaId]) ninoSeleccionado.tareasRecurrentes[tareaId] = {};
+        const estado = ninoSeleccionado.tareasRecurrentes[tareaId][hoy] || 0;
+        const tarea = tareasRecurrentesDef.find(t => t.id === tareaId);
+        if (estado >= tarea.maxPorDia) return mostrar(`Ya completaste ${tarea.maxPorDia} veces hoy`, false);
+        const nuevoEstado = estado + 1;
+        ninoSeleccionado.tareasRecurrentes[tareaId][hoy] = nuevoEstado;
+        await agregarHistorial(`🔄 ${tarea.nombre} (${nuevoEstado}/${tarea.maxPorDia}) +${tarea.puntosPorVez}⭐`, tarea.puntosPorVez);
+        await guardarDatosNino();
         render();
     }
-    async function eliminarNino(id) {
-        if (confirm("Eliminar niño? perderá sus puntos")) {
-            ninos = ninos.filter(n => n.id !== id);
-            await db.collection('ninios').doc(id).delete();
-            await db.collection('global').doc('datos').set({ ninos });
-            if (ninoSeleccionado?.id === id) ninoSeleccionado = ninos[0] || null;
-            render();
+
+    // Ruleta
+    async function girarRuleta() {
+        if (!ninoSeleccionado) return mostrar("Selecciona un niño", false);
+        if (esModoJuego) return mostrar("Modo juego: la ruleta solo para usuarios registrados", false);
+        if ((ninoSeleccionado.puntos || 0) < 5) return mostrar("Necesitas 5⭐ para girar la ruleta", false);
+        await agregarHistorial(`🎡 Giró la ruleta (costo 5⭐)`, -5);
+        const premiosRuleta = [
+            { prob: 0.3, texto: "¡Nada! 😅", puntos: 0 },
+            { prob: 0.3, texto: "+5⭐ extra", puntos: 5 },
+            { prob: 0.2, texto: "+10⭐ extra", puntos: 10 },
+            { prob: 0.1, texto: "+20⭐ extra", puntos: 20 },
+            { prob: 0.05, texto: "¡Premio doble! +30⭐", puntos: 30 },
+            { prob: 0.05, texto: "¡JACKPOT! +50⭐", puntos: 50 }
+        ];
+        let rand = Math.random();
+        let acum = 0;
+        let resultado = premiosRuleta[0];
+        for (let p of premiosRuleta) {
+            acum += p.prob;
+            if (rand <= acum) { resultado = p; break; }
         }
+        if (resultado.puntos > 0) await agregarHistorial(`🎉 Ruleta: ${resultado.texto}`, resultado.puntos);
+        else await agregarHistorial(`🎲 Ruleta: ${resultado.texto}`, 0);
+        mostrar(`Ruleta: ${resultado.texto}`);
+        const btn = document.querySelector('.ruleta-btn');
+        if (btn) btn.classList.add('girando');
+        setTimeout(() => { if(btn) btn.classList.remove('girando'); }, 500);
+        render();
     }
-    async function editarNino(id, nombre, avatar) {
-        let n = ninos.find(n => n.id === id);
-        if (n) { n.nombre = nombre; n.avatar = avatar; await guardarDatosNino(); if (ninoSeleccionado?.id === id) ninoSeleccionado = n; render(); }
+
+    // Calendario de actividad (mes actual)
+    function renderCalendario() {
+        if (!ninoSeleccionado) return "<p>Selecciona un niño</p>";
+        const hoy = new Date();
+        const year = hoy.getFullYear();
+        const month = hoy.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month+1, 0).getDate();
+        let html = `<h4>📅 Actividad - ${hoy.toLocaleString('default', { month: 'long' })} ${year}</h4><div class="calendario">`;
+        for (let i=0; i<firstDay; i++) html += `<div class="dia-calendario"></div>`;
+        const mapaPuntos = new Map();
+        ninoSeleccionado.historial?.forEach(h => {
+            let fecha = h.timestamp ? new Date(h.timestamp).toISOString().split('T')[0] : null;
+            if (fecha && fecha.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)) {
+                mapaPuntos.set(fecha, (mapaPuntos.get(fecha)||0) + h.puntos);
+            }
+        });
+        for (let d=1; d<=daysInMonth; d++) {
+            const fechaStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const puntos = mapaPuntos.get(fechaStr)||0;
+            let color = puntos>0 ? '#10b981' : (puntos<0 ? '#ef4444' : '#64748b');
+            html += `<div class="dia-calendario" style="background:${color}; color:white;">${d}<br>${puntos}⭐</div>`;
+        }
+        html += `</div>`;
+        return html;
     }
-    // CRUD Tareas/Premios
-    async function agregarTarea(nombre, puntos) { if (!nombre || puntos <= 0) return; tareas.push({ id: Date.now(), nombre, puntos: parseInt(puntos) }); ordenarTareas(); await guardarConfiguracion(); render(); }
-    async function editarTarea(id, nombre, puntos) { let t = tareas.find(t => t.id === id); if (t) { t.nombre = nombre; t.puntos = puntos; ordenarTareas(); await guardarConfiguracion(); render(); } }
-    async function eliminarTarea(id) { tareas = tareas.filter(t => t.id !== id); ordenarTareas(); await guardarConfiguracion(); render(); }
-    async function agregarPremio(nombre, costo) { if (!nombre || costo <= 0) return; premios.push({ id: Date.now(), nombre, costo: parseInt(costo) }); ordenarPremios(); await guardarConfiguracion(); render(); }
-    async function editarPremio(id, nombre, costo) { let p = premios.find(p => p.id === id); if (p) { p.nombre = nombre; p.costo = costo; ordenarPremios(); await guardarConfiguracion(); render(); } }
-    async function eliminarPremio(id) { premios = premios.filter(p => p.id !== id); ordenarPremios(); await guardarConfiguracion(); render(); }
-    async function editarUsuario(uid, datos) { await db.collection('users').doc(uid).update(datos); if (currentUser && currentUser.uid === uid) { currentUserData = { ...currentUserData, ...datos }; isAdmin = datos.isAdmin !== undefined ? datos.isAdmin : isAdmin; } render(); }
+
+    // Preparar datos para gráfica (Fase 3)
+    function prepararDatosGrafica(nino, tipo = 'semana') {
+        if (!nino || !nino.historial) return { labels: [], datos: [] };
+        const hoy = new Date();
+        const colombiaOffset = -5 * 60;
+        const localOffset = hoy.getTimezoneOffset();
+        const diff = colombiaOffset - localOffset;
+        const hoyCol = new Date(hoy.getTime() + diff * 60 * 1000);
+        hoyCol.setHours(0, 0, 0, 0);
+        
+        let dias = tipo === 'semana' ? 7 : 30;
+        let fechas = [];
+        for (let i = dias - 1; i >= 0; i--) {
+            let fecha = new Date(hoyCol);
+            fecha.setDate(hoyCol.getDate() - i);
+            fechas.push(fecha);
+        }
+        const mapa = new Map();
+        fechas.forEach(f => mapa.set(f.toISOString().split('T')[0], 0));
+        
+        nino.historial.forEach(h => {
+            let fechaEvento = h.timestamp ? new Date(h.timestamp) : (h.fecha ? new Date(h.fecha) : null);
+            if (!fechaEvento) return;
+            const fechaCol = new Date(fechaEvento.getTime() + diff * 60 * 1000);
+            fechaCol.setHours(0, 0, 0, 0);
+            const key = fechaCol.toISOString().split('T')[0];
+            if (mapa.has(key)) {
+                mapa.set(key, mapa.get(key) + h.puntos);
+            }
+        });
+        
+        const labels = fechas.map(f => f.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+        const datos = fechas.map(f => mapa.get(f.toISOString().split('T')[0]) || 0);
+        return { labels, datos };
+    }
 
     // Exportar CSV
     function exportarCSV() {
@@ -443,7 +608,45 @@
         mostrar("CSV copiado al portapapeles");
     }
 
-    // Pantalla login
+    // CRUD Niños
+    async function agregarNino(nombre, avatar) {
+        if (!nombre) return mostrar("Nombre requerido", false);
+        const nuevo = {
+            id: Date.now().toString(),
+            nombre: nombre.trim(),
+            avatar: avatar || "👶",
+            puntos: 0, totalGanado: 0, totalPerdido: 0, totalCanjeado: 0, totalReconocimiento: 0,
+            historial: [], metaPremioId: null, mejorRacha: 0, tareasRecurrentes: {}
+        };
+        ninos.push(nuevo);
+        await db.collection('ninios').doc(nuevo.id).set(nuevo);
+        await db.collection('global').doc('datos').set({ ninos });
+        if (!ninoSeleccionado) ninoSeleccionado = nuevo;
+        render();
+    }
+    async function eliminarNino(id) {
+        if (confirm("Eliminar niño? perderá sus puntos")) {
+            ninos = ninos.filter(n => n.id !== id);
+            await db.collection('ninios').doc(id).delete();
+            await db.collection('global').doc('datos').set({ ninos });
+            if (ninoSeleccionado?.id === id) ninoSeleccionado = ninos[0] || null;
+            render();
+        }
+    }
+    async function editarNino(id, nombre, avatar) {
+        let n = ninos.find(n => n.id === id);
+        if (n) { n.nombre = nombre; n.avatar = avatar; await guardarDatosNino(); if (ninoSeleccionado?.id === id) ninoSeleccionado = n; render(); }
+    }
+    // CRUD Tareas/Premios/Usuarios
+    async function agregarTarea(nombre, puntos) { if (!nombre || puntos <= 0) return; tareas.push({ id: Date.now(), nombre, puntos: parseInt(puntos) }); ordenarTareas(); await guardarConfiguracion(); render(); }
+    async function editarTarea(id, nombre, puntos) { let t = tareas.find(t => t.id === id); if (t) { t.nombre = nombre; t.puntos = puntos; ordenarTareas(); await guardarConfiguracion(); render(); } }
+    async function eliminarTarea(id) { tareas = tareas.filter(t => t.id !== id); ordenarTareas(); await guardarConfiguracion(); render(); }
+    async function agregarPremio(nombre, costo) { if (!nombre || costo <= 0) return; premios.push({ id: Date.now(), nombre, costo: parseInt(costo) }); ordenarPremios(); await guardarConfiguracion(); render(); }
+    async function editarPremio(id, nombre, costo) { let p = premios.find(p => p.id === id); if (p) { p.nombre = nombre; p.costo = costo; ordenarPremios(); await guardarConfiguracion(); render(); } }
+    async function eliminarPremio(id) { premios = premios.filter(p => p.id !== id); ordenarPremios(); await guardarConfiguracion(); render(); }
+    async function editarUsuario(uid, datos) { await db.collection('users').doc(uid).update(datos); if (currentUser && currentUser.uid === uid) { currentUserData = { ...currentUserData, ...datos }; isAdmin = datos.isAdmin !== undefined ? datos.isAdmin : isAdmin; } render(); }
+
+    // Pantalla login (con restablecer contraseña)
     function renderLogin() {
         document.getElementById('root').innerHTML = `
             <div style="display:flex; justify-content:center; align-items:center; min-height:100vh;">
@@ -479,6 +682,8 @@
                 const nd = await db.collection('ninios').doc(ninos[i].id).get();
                 if (nd.exists) ninos[i] = nd.data();
                 if (!ninos[i].mejorRacha) ninos[i].mejorRacha = 0;
+                if (!ninos[i].tareasRecurrentes) ninos[i].tareasRecurrentes = {};
+                recalcularStats(ninos[i]);
             }
             if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
             render();
@@ -518,7 +723,10 @@
         if (ninoSeleccionado) {
             const stats = ninoSeleccionado;
             html += `<div class="nino-buttons">${ninos.map(n => `<button class="tab ${ninoSeleccionado?.id === n.id ? 'tab-active' : ''}" onclick="seleccionarNino('${n.id}')">${n.avatar || '👶'} ${n.nombre} (${n.puntos || 0}⭐)</button>`).join('')}</div>`;
-            html += `<div class="card"><div class="puntos">${stats.puntos || 0}</div><div>⭐</div></div>`;
+            html += `<div class="estrella-principal">
+                        <div class="puntos-area"><div class="puntos">${stats.puntos || 0}</div><div>⭐</div></div>
+                        <div class="mascota" title="${stats.mascota}" onclick="mostrarMensajeMascota()">${stats.mascota}</div>
+                     </div>`;
             html += `<div class="dashboard-grid">
                         <div class="dashboard-card"><div>🏆</div><div style="color:#10b981;">${stats.totalGanado || 0}</div><div>Ganadas</div></div>
                         <div class="dashboard-card"><div>🔻</div><div style="color:#f97316;">${stats.totalPerdido || 0}</div><div>Perdidas</div></div>
@@ -533,13 +741,20 @@
                     <button class="tab ${pantalla === 'tareas' ? 'tab-active' : ''}" onclick="pantalla='tareas';render()">⭐ Tareas</button>
                     <button class="tab ${pantalla === 'premios' ? 'tab-active' : ''}" onclick="pantalla='premios';render()">🎁 Premios</button>
                     <button class="tab ${pantalla === 'historial' ? 'tab-active' : ''}" onclick="pantalla='historial';render()">📜 Historial</button>
+                    <button class="tab ${pantalla === 'logros' ? 'tab-active' : ''}" onclick="pantalla='logros';render()">🏅 Logros</button>
                     ${isAdmin ? `<button class="tab ${pantalla === 'admin' ? 'tab-active' : ''}" onclick="pantalla='admin';render()">🔧 Admin</button>` : ''}
                     <button class="tab" id="logout-btn">🚪 Salir</button>
                 </div>`;
 
         if (pantalla === 'tareas' && ninoSeleccionado) {
             html += `<div class="card"><h3>📋 Tareas</h3>${tareas.map(t => `<div class="tarea"><span>${t.nombre}</span><button onclick="darPuntos(${t.id})">+${t.puntos}⭐</button></div>`).join('')}
-                     <h3>🔻 Quitar puntos</h3>
+                     <h3>🔄 Tareas diarias</h3>`;
+            const hoy = getFechaColombia();
+            for (const tr of tareasRecurrentesDef) {
+                const completadas = ninoSeleccionado.tareasRecurrentes?.[tr.id]?.[hoy] || 0;
+                html += `<div class="tarea"><span>${tr.nombre} (${completadas}/${tr.maxPorDia})</span><button onclick="toggleTareaRecurrente('${tr.id}')" ${completadas>=tr.maxPorDia?'disabled':''}>+${tr.puntosPorVez}⭐</button></div>`;
+            }
+            html += `<h3>🔻 Quitar puntos</h3>
                      <div class="tarea quitar-puntos"><span>😠 Mal comportamiento</span><button onclick="quitarPuntos(1,'Mal comportamiento')">-1⭐</button></div>
                      <div class="tarea quitar-puntos"><span>😤 Berrinche</span><button onclick="quitarPuntos(2,'Berrinche')">-2⭐</button></div>
                      <div class="tarea quitar-puntos"><span>💢 Acción grave</span><button onclick="quitarPuntos(5,'Acción grave')">-5⭐</button></div>
@@ -549,6 +764,7 @@
             html += `<div class="tarea reconocimiento"><span>👍🏻 Bueno</span><button onclick="darReconocimiento(1)" ${u1 ? 'disabled' : ''}>+1⭐</button></div>
                      <div class="tarea reconocimiento"><span>👍🏻👍🏻 Muy bien</span><button onclick="darReconocimiento(2)" ${u2 ? 'disabled' : ''}>+2⭐</button></div>
                      <div class="tarea reconocimiento"><span>👍🏻👍🏻👍🏻 Excelente</span><button onclick="darReconocimiento(3)" ${u3 ? 'disabled' : ''}>+3⭐</button></div>
+                     <div class="ruleta-container"><button class="ruleta-btn" onclick="girarRuleta()">🎡 Girar ruleta (cuesta 5⭐)</button></div>
                      </div>`;
         } else if (pantalla === 'tareas' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
 
@@ -560,7 +776,14 @@
             html += `<div class="card"><h3>📜 Historial de ${ninoSeleccionado.nombre}</h3><div style="display:flex; gap:8px; justify-content:center; margin-bottom:10px;"><button onclick="exportarCSV()">📎 Exportar CSV</button><button onclick="copiarCSV()">📋 Copiar CSV</button></div>`;
             if ((ninoSeleccionado.historial || []).length === 0) html += `<p>Sin actividad</p>`;
             else ninoSeleccionado.historial.forEach(h => { html += `<div class="historial-item"><div><strong>${h.puntos > 0 ? '✅' : (h.esCanje ? '🎁' : '🔻')} ${h.texto}</strong><br><small>${h.fecha} — por ${h.quien}</small></div>${isAdmin ? `<button onclick="eliminarEntrada(${h.id})">✕</button>` : ''}</div>`; });
-            html += `</div>`;
+            html += `<hr>${renderCalendario()}</div>`;
+        } else if (pantalla === 'historial' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
+
+        if (pantalla === 'logros' && ninoSeleccionado) {
+            html += `<div class="card"><h3>🏅 Logros de ${ninoSeleccionado.nombre}</h3><ul style="text-align:left;">`;
+            (ninoSeleccionado.logros || []).forEach(l => html += `<li>${l}</li>`);
+            if (!ninoSeleccionado.logros?.length) html += `<li>Sin logros aún. ¡Sigue así!</li>`;
+            html += `</ul></div>`;
         }
 
         if (pantalla === 'admin' && isAdmin) {
@@ -570,11 +793,18 @@
                      <h4>🎁 Premios</h4><div id="lista-premios-admin"></div>
                      <div class="flex-row"><input id="nuevo-premio-nombre" placeholder="Nombre"><input id="nuevo-premio-costo" type="number" placeholder="Costo"><button id="agregar-premio">+</button></div>
                      <h4>👥 Usuarios</h4><div id="lista-usuarios"></div>
+                     <h4>📊 Tendencia diaria (puntos netos)</h4>
+                     <select id="filtro-grafica" style="margin-bottom: 10px;">
+                         <option value="semana">Últimos 7 días</option>
+                         <option value="mes">Últimos 30 días</option>
+                     </select>
+                     <canvas id="graficaDiaria" width="400" height="200" style="background: var(--input-bg); border-radius: 1rem; padding: 0.5rem; width: 100%; height: auto;"></canvas>
                      </div>`;
         }
 
         document.getElementById('root').innerHTML = html;
 
+        // Eventos
         document.getElementById('logout-btn').onclick = () => { if (esModoJuego) { esModoJuego = false; currentUser = null; renderLogin(); } else auth.signOut().then(() => location.reload()); };
         const quitarCustom = document.getElementById('quitar-custom'); if (quitarCustom) quitarCustom.onclick = () => quitarPuntos(parseInt(document.getElementById('cantidad-custom').value) || 1, document.getElementById('motivo-custom').value || 'Otro');
         const agregarNinoBtn = document.getElementById('agregar-nino'); if (agregarNinoBtn) agregarNinoBtn.onclick = () => agregarNino(document.getElementById('nuevo-nino').value, document.getElementById('nuevo-avatar').value);
@@ -601,17 +831,59 @@
                     usuariosDiv.innerHTML += `<div class="nino-item"><div>${u.emoji || '👤'} <strong>${u.nombre}</strong> (${u.rol || 'Familiar'}) ${u.isAdmin ? '👑' : ''}</div><div class="flex-row"><input id="edit-user-nombre-${doc.id}" value="${u.nombre.replace(/"/g, '&quot;')}"><input id="edit-user-emoji-${doc.id}" value="${u.emoji || '👤'}" style="width:70px"><input id="edit-user-rol-${doc.id}" value="${u.rol || 'Familiar'}"><button onclick="editarUsuario('${doc.id}',{nombre:document.getElementById('edit-user-nombre-${doc.id}').value, emoji:document.getElementById('edit-user-emoji-${doc.id}').value, rol:document.getElementById('edit-user-rol-${doc.id}').value})">💾</button>${!u.isAdmin ? `<button onclick="editarUsuario('${doc.id}',{isAdmin:true})">👑 Admin</button>` : ''}</div></div>`;
                 }
             }
+            // Gráfica (Fase 3)
+            if (ninoSeleccionado) {
+                const filtro = document.getElementById('filtro-grafica')?.value || 'semana';
+                const { labels, datos } = prepararDatosGrafica(ninoSeleccionado, filtro);
+                const ctx = document.getElementById('graficaDiaria')?.getContext('2d');
+                if (ctx) {
+                    if (chartInstance) chartInstance.destroy();
+                    chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Puntos netos del día',
+                                data: datos,
+                                backgroundColor: '#4f46e5',
+                                borderRadius: 8
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { labels: { color: 'var(--text-color)' } },
+                                tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ⭐` } }
+                            },
+                            scales: {
+                                x: { ticks: { color: 'var(--text-color)' }, grid: { color: 'var(--border-color)' } },
+                                y: { ticks: { color: 'var(--text-color)' }, grid: { color: 'var(--border-color)' }, title: { display: true, text: '⭐', color: 'var(--text-color)' } }
+                            }
+                        }
+                    });
+                }
+                const filtroSelect = document.getElementById('filtro-grafica');
+                if (filtroSelect && !filtroSelect.hasListener) {
+                    filtroSelect.hasListener = true;
+                    filtroSelect.addEventListener('change', () => render());
+                }
+            }
         }
     }
 
+    // Funciones globales
     window.seleccionarNino = (id) => { ninoSeleccionado = ninos.find(n => n.id === id); render(); };
     window.darPuntos = darPuntos; window.quitarPuntos = quitarPuntos; window.darReconocimiento = darReconocimiento;
     window.canjearPremio = canjearPremio; window.eliminarEntrada = eliminarEntrada; window.eliminarNino = eliminarNino;
     window.editarNino = editarNino; window.agregarTarea = agregarTarea; window.editarTarea = editarTarea;
     window.eliminarTarea = eliminarTarea; window.agregarPremio = agregarPremio; window.editarPremio = editarPremio;
     window.eliminarPremio = eliminarPremio; window.editarUsuario = editarUsuario;
-    window.exportarCSV = exportarCSV; window.copiarCSV = copiarCSV;
+    window.exportarCSV = exportarCSV; window.copiarCSV = copiarCSV; window.girarRuleta = girarRuleta;
+    window.toggleTareaRecurrente = toggleTareaRecurrente;
+    window.mostrarMensajeMascota = () => { mostrar(`¡${ninoSeleccionado?.mascota || '🐣'} te acompaña! Sigue así`, true); };
 
+    // Inicialización
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             currentUser = user; esModoJuego = false;
@@ -625,6 +897,7 @@
                 const nd = await db.collection('ninios').doc(ninos[i].id).get();
                 if (nd.exists) ninos[i] = nd.data();
                 if (!ninos[i].mejorRacha) ninos[i].mejorRacha = 0;
+                if (!ninos[i].tareasRecurrentes) ninos[i].tareasRecurrentes = {};
                 recalcularStats(ninos[i]);
             }
             if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
