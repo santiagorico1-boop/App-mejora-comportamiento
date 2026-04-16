@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Estrellitas - Ruleta Definitiva</title>
+    <title>Estrellitas</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #0a0f1e, #0f172a);
@@ -440,13 +440,18 @@
         if (!tarea) return;
         
         const hoy = getFechaStrColombia();
-        if (!ninoSeleccionado.tareasCompletadas) ninoSeleccionado.tareasCompletadas = {};
-        if (ninoSeleccionado.tareasCompletadas[tarea.id] === hoy) {
-            mostrar(`Ya completaste "${tarea.nombre}" hoy. ¡Vuelve mañana!`, false);
-            return;
-        }
+if (!ninoSeleccionado.tareasCompletadas) ninoSeleccionado.tareasCompletadas = {};
+
+// 🚨 SOLO aplica restricción si NO es modo juego
+if (!esModoJuego && ninoSeleccionado.tareasCompletadas[tarea.id] === hoy) {
+    mostrar(`Ya completaste "${tarea.nombre}" hoy. ¡Vuelve mañana!`, false);
+    return;
+}
         
-        ninoSeleccionado.tareasCompletadas[tarea.id] = hoy;
+        // 🚨 SOLO guarda restricción en modo normal
+if (!esModoJuego) {
+    ninoSeleccionado.tareasCompletadas[tarea.id] = hoy;
+}
         await agregarHistorial(`✅ ${tarea.nombre} +${tarea.puntos}⭐`, tarea.puntos);
         mostrar(`+${tarea.puntos}⭐ para ${ninoSeleccionado.nombre}`);
     }
@@ -488,13 +493,64 @@
         }
     }
 
-    async function eliminarEntrada(id) {
-        if (!ninoSeleccionado) return;
-        ninoSeleccionado.historial = ninoSeleccionado.historial.filter(h => h.id !== id);
-        recalcularStats(ninoSeleccionado);
-        await guardarDatosNino();
-        render();
+async function eliminarEntrada(id) {
+    if (!ninoSeleccionado) return;
+
+    const entrada = ninoSeleccionado.historial.find(h => h.id === id);
+    if (!entrada) return;
+
+    // 🔁 Revertir efectos especiales
+
+    // 1. Si era tarea → liberar bloqueo diario
+    if (entrada.texto.includes("✅")) {
+        const tarea = tareas.find(t => entrada.texto.includes(t.nombre));
+        if (tarea && ninoSeleccionado.tareasCompletadas) {
+            delete ninoSeleccionado.tareasCompletadas[tarea.id];
+        }
     }
+
+    // 2. Si era reconocimiento → liberar uso diario
+    if (entrada.esReconocimiento) {
+        const cantidad = Math.abs(entrada.puntos);
+        const usuario = getUsuarioId();
+
+        if (usuario === 'modoJuego') {
+            localStorage.removeItem(`reco_${cantidad}`);
+        } else {
+            await db.collection('reconocimientosDiarios')
+                .doc(`${usuario}_${cantidad}`)
+                .delete();
+        }
+    }
+
+    // 3. Si era ruleta → devolver giro + estrellas
+    if (entrada.texto.includes("🎡 Ruleta")) {
+        const hoy = getFechaStrColombia();
+
+        if (ninoSeleccionado.girosRuleta && ninoSeleccionado.girosRuleta[hoy]) {
+            ninoSeleccionado.girosRuleta[hoy]--;
+            if (ninoSeleccionado.girosRuleta[hoy] <= 0) {
+                delete ninoSeleccionado.girosRuleta[hoy];
+            }
+        }
+    }
+
+    // 4. Si era GOLD → quitar ticket
+    if (entrada.texto.includes("Golden Ticket")) {
+        if (ninoSeleccionado.goldenTickets > 0) {
+            ninoSeleccionado.goldenTickets--;
+        }
+    }
+
+    // 🗑 eliminar entrada
+    ninoSeleccionado.historial = ninoSeleccionado.historial.filter(h => h.id !== id);
+
+    recalcularStats(ninoSeleccionado);
+    await guardarDatosNino();
+    render();
+
+    mostrar("↩️ Acción deshecha correctamente");
+}
 
     async function toggleTareaRecurrente(tareaId) {
         if (!ninoSeleccionado) return;
@@ -918,7 +974,23 @@ function lanzarConfetti(tipo = "normal") {
         let n = ninos.find(n => n.id === id);
         if (n) { n.nombre = nombre; n.avatar = avatar; await guardarDatosNino(); if (ninoSeleccionado?.id === id) ninoSeleccionado = n; render(); }
     }
+async function desbloquearTarea(tareaId) {
+    if (!ninoSeleccionado) return;
 
+    const tarea = tareas.find(t => t.id === tareaId);
+    if (!tarea) return;
+
+    if (!confirm(`¿Desbloquear "${tarea.nombre}" para hoy?`)) return;
+
+    if (ninoSeleccionado.tareasCompletadas) {
+        delete ninoSeleccionado.tareasCompletadas[tareaId];
+    }
+
+    await guardarDatosNino();
+    render();
+
+    mostrar(`🔓 Tarea desbloqueada: ${tarea.nombre}`);
+}
     async function agregarTarea(nombre, puntos) { if (!nombre || puntos <= 0) return; tareas.push({ id: Date.now(), nombre, puntos: parseInt(puntos) }); ordenarTareas(); await guardarConfiguracion(); render(); }
     async function editarTarea(id, nombre, puntos) { let t = tareas.find(t => t.id === id); if (t) { t.nombre = nombre; t.puntos = puntos; ordenarTareas(); await guardarConfiguracion(); render(); } }
     async function eliminarTarea(id) { tareas = tareas.filter(t => t.id !== id); ordenarTareas(); await guardarConfiguracion(); render(); }
@@ -1048,9 +1120,26 @@ if (!esModoJuego && currentUserData) {
             const hoy = getFechaStrColombia();
             html += `<div class="card"><h3>📋 Tareas</h3>`;
             for (let t of tareas) {
-                const yaCompletada = ninoSeleccionado.tareasCompletadas?.[t.id] === hoy;
-                html += `<div class="tarea"><span>${t.nombre}</span><button onclick="darPuntos(${t.id})" ${yaCompletada ? 'disabled' : ''}>+${t.puntos}⭐</button>${yaCompletada ? ' (✓ hoy)' : ''}</div>`;
-            }
+    const yaCompletada = ninoSeleccionado.tareasCompletadas?.[t.id] === hoy;
+
+    html += `<div class="tarea">
+        <span>${t.nombre}</span>
+        
+        <button onclick="darPuntos(${t.id})" ${yaCompletada ? 'disabled' : ''}>
+            +${t.puntos}⭐
+        </button>
+
+        ${yaCompletada ? ' (✓ hoy)' : ''}
+
+        ${
+            yaCompletada && isAdmin && !esModoJuego
+            ? `<button onclick="desbloquearTarea(${t.id})" style="background:#f59e0b;">
+                    🔓
+               </button>`
+            : ''
+        }
+    </div>`;
+}
             html += `<h3>🔄 Tareas diarias (rutinas)</h3>`;
             for (const tr of tareasRecurrentesDef) {
                 const completadas = ninoSeleccionado.tareasRecurrentes?.[tr.id]?.[hoy] || 0;
