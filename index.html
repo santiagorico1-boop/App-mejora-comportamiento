@@ -215,6 +215,20 @@
             .puntos { font-size: 2.5rem; }
             .mascota { font-size: 2.5rem; }
         }
+        @keyframes levelPop {
+    0% { transform: scale(0.5); opacity:0; }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity:1; }
+}
+@keyframes highlightTop {
+    0% { box-shadow: 0 0 0 0 rgba(250,204,21,0.7); }
+    50% { box-shadow: 0 0 20px 10px rgba(250,204,21,0.7); }
+    100% { box-shadow: 0 0 0 0 rgba(250,204,21,0); }
+}
+
+.highlight-top {
+    animation: highlightTop 0.8s ease;
+}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -241,7 +255,14 @@
 
     // ---------- ESTADO ----------
     let currentUser = null, currentUserData = null, isAdmin = false, esModoJuego = false;
-    let pantalla = 'tareas', ninos = [], ninoSeleccionado = null, tareas = [], premios = [], chartInstance = null;
+    let ultimoNivelDetectado = null;
+    let pantalla = 'tareas',
+    ninosOriginales = [], // 🔒 NUEVO
+    ninos = [],
+    ninoSeleccionado = null,
+    tareas = [],
+    premios = [],
+    chartInstance = null;
     let ultimoMensajeRuleta = "✨ Haz girar la ruleta ✨";
 
     // Sonidos
@@ -402,14 +423,36 @@
         if (nino.goldenTickets >= 5) logros.push("🎫 Coleccionista de Golden Tickets");
         nino.logros = logros;
         
-        // Mascota basada en puntos ganados (totalGanado, no el saldo actual)
-        if (ganado < 0) nino.mascota = "😢";
-        else if (ganado < 100) nino.mascota = "🐣";
-        else if (ganado < 300) nino.mascota = "🐥";
-        else if (ganado < 600) nino.mascota = "🦊";
-        else if (ganado < 1000) nino.mascota = "🦄";
-        else nino.mascota = "🐉";
-        
+        // 🆕 Mascota basada en NIVEL
+const nivelMascota = nino.nivel || 1;
+
+if (nivelMascota <= 1) nino.mascota = "🥚";          // huevo
+else if (nivelMascota <= 2) nino.mascota = "🐣";     // bebé
+else if (nivelMascota <= 4) nino.mascota = "🐥";     // creciendo
+else if (nivelMascota <= 6) nino.mascota = "🦊";     // intermedio
+else if (nivelMascota <= 9) nino.mascota = "🦄";     // avanzado
+else nino.mascota = "🐉";                            // épico
+               // 🆕 SISTEMA DE NIVELES Y XP
+        const xp = ganado; // usamos puntos ganados como XP
+        const nivel = Math.floor(xp / 100) + 1;
+        // 🎉 Detectar subida de nivel
+if (nino.nivelAnterior === undefined) {
+    nino.nivelAnterior = nivel;
+}
+
+if (nivel > nino.nivelAnterior) {
+    nino.subioNivel = true;
+} else {
+    nino.subioNivel = false;
+}
+
+nino.nivelAnterior = nivel;
+        const xpActualNivel = xp % 100;
+        const xpSiguienteNivel = 100;
+
+        nino.nivel = nivel;
+        nino.xpActual = xpActualNivel;
+        nino.xpMax = xpSiguienteNivel;
         return nino;
     }
 
@@ -436,6 +479,18 @@
     // ---------- TAREAS NORMALES CON LÍMITE DIARIO (una vez por niño) ----------
     async function darPuntos(idTarea) {
         if (!ninoSeleccionado) return mostrar("Selecciona un niño", false);
+        // 📍 Subir pantalla para ver animaciones
+window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+});
+setTimeout(() => {
+    const topCard = document.querySelector('.estrella-principal');
+    if (topCard) {
+        topCard.classList.add('highlight-top');
+        setTimeout(() => topCard.classList.remove('highlight-top'), 800);
+    }
+}, 300);
         const tarea = tareas.find(t => t.id === idTarea);
         if (!tarea) return;
         
@@ -452,7 +507,25 @@ if (!esModoJuego && ninoSeleccionado.tareasCompletadas[tarea.id] === hoy) {
 if (!esModoJuego) {
     ninoSeleccionado.tareasCompletadas[tarea.id] = hoy;
 }
-        await agregarHistorial(`✅ ${tarea.nombre} +${tarea.puntos}⭐`, tarea.puntos);
+        // ⚡ aplicar multiplicador si existe
+let puntosFinal = tarea.puntos;
+let usoMultiplicador = false;
+
+if (ninoSeleccionado.multiplicador && ninoSeleccionado.multiplicador > 1) {
+    puntosFinal = tarea.puntos * ninoSeleccionado.multiplicador;
+    usoMultiplicador = true;
+}
+
+// registrar
+await agregarHistorial(
+    `✅ ${tarea.nombre} +${puntosFinal}⭐${usoMultiplicador ? ' 🚀 x2' : ''}`,
+    puntosFinal
+);
+
+// consumir multiplicador (solo una vez)
+if (usoMultiplicador) {
+    ninoSeleccionado.multiplicador = 1;
+}
         mostrar(`+${tarea.puntos}⭐ para ${ninoSeleccionado.nombre}`);
     }
 
@@ -835,7 +908,20 @@ ctx.fillText(textoMostrar, distanciaTexto, 6);
         }
         requestAnimationFrame(animar);
     }
+function mostrarLevelUp(nino) {
+    const overlay = document.getElementById('levelup-overlay');
+    const text = document.getElementById('levelup-text');
 
+    if (!overlay || !text) return;
+
+    text.innerHTML = `🎉 ${nino.nombre} alcanzó NIVEL ${nino.nivel}`;
+
+    overlay.style.display = 'flex';
+
+    setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 2000);
+}
     // Calendario
     function renderCalendario() {
         if (!ninoSeleccionado) return "<p>Selecciona un niño</p>";
@@ -945,6 +1031,46 @@ function lanzarConfetti(tipo = "normal") {
         });
     }
 }
+async function abrirCofreDiario() {
+    if (!ninoSeleccionado) return;
+
+    const hoy = getFechaStrColombia();
+
+    if (!ninoSeleccionado.cofreDiario) ninoSeleccionado.cofreDiario = {};
+
+    if (ninoSeleccionado.cofreDiario[hoy]) {
+        mostrar("Ya abriste el cofre hoy 🎁", false);
+        return;
+    }
+
+    ninoSeleccionado.cofreDiario[hoy] = true;
+
+    // Probabilidades
+    const rand = Math.random();
+    let mensaje = "";
+    let puntos = 0;
+
+    if (rand < 0.5) {
+        puntos = 3;
+        mensaje = "🎁 Ganaste 3⭐";
+    } else if (rand < 0.8) {
+        puntos = 5;
+        mensaje = "🎁 Ganaste 5⭐";
+    } else if (rand < 0.95) {
+        ninoSeleccionado.multiplicador = 2;
+        mensaje = "🚀 Multiplicador x2 en tu próxima tarea!";
+    } else {
+        mensaje = "😅 Cofre vacío... intenta mañana";
+    }
+
+    if (puntos > 0) {
+        await agregarHistorial(`🎁 Cofre diario +${puntos}⭐`, puntos);
+    }
+
+    await guardarDatosNino();
+    mostrar(mensaje);
+    render();
+}
     async function agregarNino(nombre, avatar) {
         if (!nombre) return mostrar("Nombre requerido", false);
         const nuevo = {
@@ -953,7 +1079,8 @@ function lanzarConfetti(tipo = "normal") {
             avatar: avatar || "👶",
             puntos: 0, totalGanado: 0, totalPerdido: 0, totalCanjeado: 0, totalReconocimiento: 0,
             historial: [], metaPremioId: null, mejorRacha: 0, tareasRecurrentes: {}, goldenTickets: 0, girosRuleta: {},
-            tareasCompletadas: {}
+            tareasCompletadas: {},
+            multiplicador:1
         };
         ninos.push(nuevo);
         await db.collection('ninios').doc(nuevo.id).set(nuevo);
@@ -1029,7 +1156,10 @@ async function desbloquearTarea(tareaId) {
             esModoJuego = true; isAdmin = false; currentUser = { uid: 'modoJuego' };
             await cargarConfiguracion();
             const globalData = await db.collection('global').doc('datos').get();
-            ninos = globalData.exists ? globalData.data().ninos || [] : [];
+            ninosOriginales = globalData.exists ? globalData.data().ninos || [] : [];
+
+// 🎮 Modo juego usa copia
+ninos = JSON.parse(JSON.stringify(ninosOriginales));
             for (let i = 0; i < ninos.length; i++) {
                 const nd = await db.collection('ninios').doc(ninos[i].id).get();
                 if (nd.exists) ninos[i] = nd.data();
@@ -1038,6 +1168,7 @@ async function desbloquearTarea(tareaId) {
                 if (!ninos[i].tareasCompletadas) ninos[i].tareasCompletadas = {};
                 if (ninos[i].goldenTickets === undefined) ninos[i].goldenTickets = 0;
                 if (!ninos[i].girosRuleta) ninos[i].girosRuleta = {};
+                if (!ninos[i].multiplicador) ninos[i].multiplicador = 1;
                 recalcularStats(ninos[i]);
             }
             if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
@@ -1074,6 +1205,26 @@ async function desbloquearTarea(tareaId) {
     async function render() {
         if (!currentUser && !esModoJuego) { renderLogin(); return; }
         let html = `<div id="msg"></div>`;
+        html += `
+<div id="levelup-overlay" style="
+    position:fixed; inset:0; display:none; 
+    background:rgba(0,0,0,0.75); z-index:9999;
+    align-items:center; justify-content:center; text-align:center;">
+    <div style="
+        background:linear-gradient(135deg,#4f46e5,#9333ea);
+        padding:30px; border-radius:20px; color:white;
+        box-shadow:0 0 40px rgba(255,255,255,0.3);
+        animation: levelPop 0.6s ease;">
+        <div style="font-size:2rem;">🚀 LEVEL UP</div>
+        <div id="levelup-text" style="font-size:1.2rem; margin-top:10px;"></div>
+    </div>
+</div>
+`;
+        if (esModoJuego) {
+    html += `<div style="text-align:center; font-size:0.8rem; color:#facc15;">
+        🎮 Modo juego: los cambios no se guardan
+    </div>`;
+}
 
 if (!esModoJuego && currentUserData) {
     html += `
@@ -1083,13 +1234,76 @@ if (!esModoJuego && currentUserData) {
     </div>`;
 }
         if (ninoSeleccionado) {
+          // 🎉 EFECTO SUBIDA DE NIVEL
+if (ninoSeleccionado.subioNivel) {
+
+    // 🎬 Pantalla LEVEL UP
+    mostrarLevelUp(ninoSeleccionado);
+
+    // 🎉 Confetti PRO
+    lanzarConfetti("gold");
+
+    // 🔊 Sonido épico triple
+    playSound('logro');
+    setTimeout(() => playSound('logro'), 150);
+    setTimeout(() => playSound('logro'), 300);
+
+    // 💥 Animación zoom puntos
+    setTimeout(() => {
+        const puntosDiv = document.querySelector('.puntos');
+        if (puntosDiv) {
+            puntosDiv.style.transform = 'scale(1.5)';
+            puntosDiv.style.transition = 'transform 0.3s';
+
+            setTimeout(() => puntosDiv.style.transform = 'scale(1)', 300);
+        }
+    }, 100);
+
+    // 🎁 RECOMPENSA AUTOMÁTICA
+    let recompensa = 0;
+    if (ninoSeleccionado.nivel % 5 === 0) {
+        recompensa = 20; // nivel importante
+    } else {
+        recompensa = 10;
+    }
+
+    agregarHistorial(`🎉 Subió a nivel ${ninoSeleccionado.nivel} +${recompensa}⭐`, recompensa);
+
+    // 🔓 DESBLOQUEOS
+    if (ninoSeleccionado.nivel === 3) {
+        mostrar("🔓 Desbloqueaste BONUS diario!");
+    }
+    if (ninoSeleccionado.nivel === 5) {
+        mostrar("🎡 Ruleta mejorada desbloqueada!");
+    }
+    if (ninoSeleccionado.nivel === 10) {
+        mostrar("👑 Modo leyenda desbloqueado!");
+    }
+
+    ninoSeleccionado.subioNivel = false;
+}
             const stats = ninoSeleccionado;
             html += `<div class="nino-buttons">${ninos.map(n => `<button class="tab ${ninoSeleccionado?.id === n.id ? 'tab-active' : ''}" onclick="seleccionarNino('${n.id}')">${n.avatar || '👶'} ${n.nombre} (${n.puntos || 0}⭐)</button>`).join('')}</div>`;
             const mensajes = ["✨ ¡Sigue brillando!", "⭐ Cada estrella cuenta", "🏆 Tú puedes lograrlo", "🌈 Buen trabajo", "🎯 Meta alcanzable"];
             const mensajeAleatorio = mensajes[Math.floor(Math.random() * mensajes.length)];
             html += `<div class="estrella-principal">
                         <div class="puntos-area">
-                            <div class="puntos">${stats.puntos || 0}</div>
+                            <div class="puntos">${stats.puntos || 0}
+                            <div style="font-size:0.9rem; margin-top:4px;">
+    🧠 Nivel ${stats.nivel || 1}
+</div>
+
+<div class="barra-progreso">
+    <div class="barra-fill" style="width:${(stats.xpActual || 0) / (stats.xpMax || 100) * 100}%"></div>
+</div>
+
+<div style="font-size:0.7rem; opacity:0.7;">
+    ${stats.xpActual || 0} / ${stats.xpMax || 100} XP
+</div>
+                            </div>
+                            ${ninoSeleccionado.multiplicador > 1 ? 
+    `<div style="color:#facc15; font-size:0.8rem;">🚀 Multiplicador activo x${ninoSeleccionado.multiplicador}</div>` 
+: ''}
                             <div class="mensaje-motivador">${mensajeAleatorio}</div>
                         </div>
                         <div class="mascota" title="${stats.mascota}" onclick="mostrarMensajeMascota()">${stats.mascota}</div>
@@ -1332,7 +1546,10 @@ if (!esModoJuego && currentUserData) {
             currentUserData = doc.exists ? doc.data() : null;
             await cargarConfiguracion();
             const globalData = await db.collection('global').doc('datos').get();
-            ninos = globalData.exists ? globalData.data().ninos || [] : [];
+            ninosOriginales = globalData.exists ? globalData.data().ninos || [] : [];
+
+// 🔒 Adulto usa datos reales
+ninos = ninosOriginales;
             for (let i = 0; i < ninos.length; i++) {
                 const nd = await db.collection('ninios').doc(ninos[i].id).get();
                 if (nd.exists) ninos[i] = nd.data();
@@ -1341,6 +1558,7 @@ if (!esModoJuego && currentUserData) {
                 if (!ninos[i].tareasCompletadas) ninos[i].tareasCompletadas = {};
                 if (ninos[i].goldenTickets === undefined) ninos[i].goldenTickets = 0;
                 if (!ninos[i].girosRuleta) ninos[i].girosRuleta = {};
+                if (!ninos[i].multiplicador) ninos[i].multiplicador = 1;
                 recalcularStats(ninos[i]);
             }
             if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
