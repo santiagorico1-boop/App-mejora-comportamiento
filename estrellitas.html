@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Estrellitas - Puntos para niños</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #0a0f1e, #0f172a);
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+            color: #f1f5f9;
+            padding: 16px;
+            margin: 0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+        }
+        /* Tarjetas */
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(4px);
+            border-radius: 2rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        /* Botones */
+        button, .tab {
+            background: #334155;
+            border: none;
+            color: white;
+            font-weight: 600;
+            border-radius: 2rem;
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+        button:hover, .tab:hover {
+            background: #4f46e5;
+            transform: scale(0.97);
+        }
+        .tab-active {
+            background: #4f46e5;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4);
+        }
+        /* Estrella grande con animación */
+        .estrella-principal {
+            text-align: center;
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border-radius: 3rem;
+            padding: 1.8rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 0 20px rgba(250, 204, 21, 0.3);
+            border: 1px solid rgba(250, 204, 21, 0.3);
+        }
+        .puntos {
+            font-size: 5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #facc15, #ffb347);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 15px rgba(250, 204, 21, 0.5);
+            margin: 0;
+            line-height: 1;
+        }
+        .estrellita-icono {
+            font-size: 2rem;
+            filter: drop-shadow(0 0 6px #facc15);
+            animation: brillo 1.5s infinite alternate;
+        }
+        @keyframes brillo {
+            0% { text-shadow: 0 0 2px #facc15; opacity: 0.8; }
+            100% { text-shadow: 0 0 12px #ffb347; opacity: 1; }
+        }
+        /* Botones niños horizontales */
+        .nino-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        /* Dashboard 4 columnas */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.8rem;
+            margin: 1rem 0;
+        }
+        .dashboard-card {
+            background: #0f172a;
+            border-radius: 1.5rem;
+            padding: 0.8rem;
+            text-align: center;
+            transition: 0.2s;
+        }
+        .dashboard-card div:first-child {
+            font-size: 1.8rem;
+        }
+        .dashboard-card div:nth-child(2) {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        /* Tareas, premios, etc */
+        .tarea, .nino-item, .premio-item {
+            background: #1e293b;
+            border-radius: 1.5rem;
+            padding: 0.8rem 1rem;
+            margin: 0.6rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .flex-row {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            margin-top: 0.8rem;
+        }
+        input, select {
+            background: #0f172a;
+            border: 1px solid #334155;
+            padding: 0.7rem 1rem;
+            border-radius: 1.5rem;
+            color: white;
+            font-size: 0.9rem;
+        }
+        .historial-item {
+            background: #0f172a;
+            border-radius: 1rem;
+            padding: 0.7rem;
+            margin: 0.5rem 0;
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        .quitar-puntos button { background: #dc2626; }
+        .reconocimiento button { background: #10b981; }
+        .reconocimiento button:disabled, .quitar-puntos button:disabled { background: #475569; cursor: not-allowed; opacity: 0.6; transform: none; }
+        .barra-progreso { background: #0f172a; border-radius: 1rem; height: 1.2rem; overflow: hidden; margin: 0.5rem 0; }
+        .barra-fill { background: #facc15; height: 100%; width: 0%; transition: width 0.3s; }
+        @media (max-width: 550px) {
+            .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+            .puntos { font-size: 3.5rem; }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="container" id="root"></div>
+
+<script>
+    // ---------- FIREBASE ----------
+    const firebaseConfig = {
+        apiKey: "AIzaSyBmK46i3J4iaVAM1zAp9sWyXWqrgCDovOc",
+        authDomain: "app-estrellitas.firebaseapp.com",
+        projectId: "app-estrellitas",
+        storageBucket: "app-estrellitas.appspot.com",
+        messagingSenderId: "1008307661681",
+        appId: "1:1008307661681:web:f1a8134f67910e2279e4d0"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // ---------- ESTADO GLOBAL ----------
+    let currentUser = null;
+    let currentUserData = null;
+    let isAdmin = false;
+    let esModoJuego = false;      // modo juego: NO guarda cambios reales
+    let pantalla = 'tareas';
+    let ninos = [];
+    let ninoSeleccionado = null;
+    let tareas = [];
+    let premios = [];
+    let chartInstance = null;
+
+    // Helper mensajes
+    function mostrar(texto, ok = true) {
+        let msg = document.getElementById('msg');
+        if (msg) {
+            msg.textContent = texto;
+            msg.style.color = ok ? '#10b981' : '#ef4444';
+            setTimeout(() => msg.textContent = '', 2500);
+        }
+    }
+
+    // Zona horaria Colombia (UTC-5)
+    function getFechaColombia() {
+        const now = new Date();
+        const colombiaOffset = -5 * 60;
+        const localOffset = now.getTimezoneOffset();
+        const diff = colombiaOffset - localOffset;
+        const colombiaDate = new Date(now.getTime() + diff * 60 * 1000);
+        return colombiaDate.toISOString().split('T')[0];
+    }
+
+    // ---------- RECONOCIMIENTO POR USUARIO (Firestore + localStorage para modo juego) ----------
+    function getUsuarioId() {
+        if (esModoJuego) return 'modoJuego';
+        return currentUser ? currentUser.uid : 'anonimo';
+    }
+
+    async function reconocimientoUsadoHoyGlobal(cantidad) {
+        const hoy = getFechaColombia();
+        const usuario = getUsuarioId();
+        if (usuario === 'modoJuego') {
+            const key = `reco_${cantidad}`;
+            const stored = localStorage.getItem(key);
+            return stored === hoy;
+        }
+        if (usuario !== 'anonimo') {
+            const docRef = db.collection('reconocimientosDiarios').doc(`${usuario}_${cantidad}`);
+            const doc = await docRef.get();
+            return doc.exists && doc.data().fecha === hoy;
+        }
+        return false;
+    }
+
+    async function marcarReconocimientoUsadoGlobal(cantidad) {
+        const hoy = getFechaColombia();
+        const usuario = getUsuarioId();
+        if (usuario === 'modoJuego') {
+            localStorage.setItem(`reco_${cantidad}`, hoy);
+            return;
+        }
+        if (usuario !== 'anonimo') {
+            await db.collection('reconocimientosDiarios').doc(`${usuario}_${cantidad}`).set({ fecha: hoy, cantidad });
+        }
+    }
+
+    // ---------- ORDEN ----------
+    function ordenarTareas() { tareas.sort((a,b) => b.puntos - a.puntos); }
+    function ordenarPremios() { premios.sort((a,b) => b.costo - a.costo); }
+
+    // ---------- CONFIGURACIÓN (tareas/premios) ----------
+    async function cargarConfiguracion() {
+        const configDoc = await db.collection('configuracion').doc('estrellitas').get();
+        if (configDoc.exists) {
+            const data = configDoc.data();
+            tareas = data.tareas || [];
+            premios = data.premios || [];
+        }
+        if (tareas.length === 0) {
+            tareas = [
+                { id: 1, nombre: "📚 Leer 15 min", puntos: 10 },
+                { id: 2, nombre: "🏠 Ordenar cuarto", puntos: 8 },
+                { id: 3, nombre: "🍽️ Poner la mesa", puntos: 5 },
+                { id: 4, nombre: "✏️ Hacer tareas", puntos: 12 }
+            ];
+            await guardarConfiguracion();
+        }
+        if (premios.length === 0) {
+            premios = [
+                { id: 1, nombre: "🚲 Montar bici", costo: 30 },
+                { id: 2, nombre: "🌳 Ir al parque", costo: 25 },
+                { id: 3, nombre: "🍦 Helado", costo: 35 },
+                { id: 4, nombre: "📱 30 min pantalla", costo: 20 }
+            ];
+            await guardarConfiguracion();
+        }
+        ordenarTareas(); ordenarPremios();
+    }
+    async function guardarConfiguracion() {
+        ordenarTareas(); ordenarPremios();
+        await db.collection('configuracion').doc('estrellitas').set({ tareas, premios });
+    }
+
+    // ---------- GUARDAR NIÑO (solo si NO es modo juego) ----------
+    async function guardarDatosNino() {
+        if (!ninoSeleccionado || esModoJuego) return;  // MODO JUEGO NO GUARDA
+        await db.collection('ninios').doc(ninoSeleccionado.id).set(ninoSeleccionado);
+        const index = ninos.findIndex(n => n.id === ninoSeleccionado.id);
+        if (index !== -1) ninos[index] = ninoSeleccionado;
+        await db.collection('global').doc('datos').set({ ninos });
+    }
+
+    // Recalcular estadísticas
+    function recalcularStats(nino) {
+        let ganado = 0, perdido = 0, canjeado = 0, reconocimiento = 0, actual = 0;
+        if (nino.historial) {
+            for (const h of nino.historial) {
+                if (h.puntos > 0) {
+                    ganado += h.puntos;
+                    actual += h.puntos;
+                    if (h.esReconocimiento) reconocimiento += h.puntos;
+                } else {
+                    if (h.esCanje) canjeado += Math.abs(h.puntos);
+                    else perdido += Math.abs(h.puntos);
+                    actual += h.puntos;
+                }
+            }
+        }
+        nino.totalGanado = ganado;
+        nino.totalPerdido = perdido;
+        nino.totalCanjeado = canjeado;
+        nino.totalReconocimiento = reconocimiento;
+        nino.puntos = Math.max(0, actual);
+        return nino;
+    }
+
+    // Agregar historial (con guardado condicional)
+    async function agregarHistorial(texto, cambio, esCanje = false, esReconocimiento = false) {
+        if (!ninoSeleccionado) { mostrar("Selecciona un niño", false); return; }
+        const entrada = {
+            id: Date.now(),
+            texto: texto,
+            puntos: cambio,
+            esCanje, esReconocimiento,
+            quien: currentUserData?.nombre || (esModoJuego ? '🎮 Juego' : 'Admin'),
+            fecha: new Date().toLocaleString(),
+            timestamp: Date.now()
+        };
+        ninoSeleccionado.historial = [entrada, ...(ninoSeleccionado.historial || []).slice(0, 199)];
+        recalcularStats(ninoSeleccionado);
+        await guardarDatosNino();   // modo juego no guarda (ver condición dentro)
+        render();
+    }
+
+    // Acciones principales
+    async function darPuntos(idTarea) {
+        if (!ninoSeleccionado) { mostrar("Selecciona un niño", false); return; }
+        const tarea = tareas.find(t => t.id === idTarea);
+        if (!tarea) return;
+        await agregarHistorial(`✅ ${tarea.nombre} +${tarea.puntos}⭐`, tarea.puntos);
+        mostrar(`+${tarea.puntos}⭐ para ${ninoSeleccionado.nombre}`);
+    }
+
+    async function quitarPuntos(cantidad, motivo) {
+        if (!ninoSeleccionado) { mostrar("Selecciona un niño", false); return; }
+        if ((ninoSeleccionado.puntos || 0) < cantidad) {
+            mostrar(`Solo tiene ${ninoSeleccionado.puntos}⭐`, false);
+            return;
+        }
+        await agregarHistorial(`🔻 ${motivo} -${cantidad}⭐`, -cantidad);
+        mostrar(`-${cantidad}⭐ para ${ninoSeleccionado.nombre}`);
+    }
+
+    async function darReconocimiento(cantidad) {
+        if (!ninoSeleccionado) { mostrar("Selecciona un niño", false); return; }
+        const yaUsado = await reconocimientoUsadoHoyGlobal(cantidad);
+        if (yaUsado) {
+            mostrar(`Ya usaste +${cantidad}⭐ hoy. Vuelve mañana.`, false);
+            return;
+        }
+        await agregarHistorial(`👍🏻 Reconocimiento: +${cantidad}⭐`, cantidad, false, true);
+        await marcarReconocimientoUsadoGlobal(cantidad);
+        mostrar(`👍🏻 +${cantidad}⭐ para ${ninoSeleccionado.nombre}`);
+    }
+
+    async function canjearPremio(idPremio) {
+        if (!ninoSeleccionado) { mostrar("Selecciona un niño", false); return; }
+        const premio = premios.find(p => p.id === idPremio);
+        if (!premio) return;
+        if ((ninoSeleccionado.puntos || 0) >= premio.costo) {
+            await agregarHistorial(`🎁 CANJE: ${premio.nombre} -${premio.costo}⭐`, -premio.costo, true);
+            mostrar(`¡${ninoSeleccionado.nombre} canjeó ${premio.nombre}!`);
+        } else {
+            mostrar(`Faltan ${premio.costo - ninoSeleccionado.puntos}⭐`, false);
+        }
+    }
+
+    async function eliminarEntrada(id) {
+        if (!ninoSeleccionado) return;
+        ninoSeleccionado.historial = (ninoSeleccionado.historial || []).filter(h => h.id !== id);
+        recalcularStats(ninoSeleccionado);
+        await guardarDatosNino();
+        render();
+    }
+
+    // Meta
+    async function seleccionarMeta(premioId) {
+        if (!ninoSeleccionado) return;
+        ninoSeleccionado.metaPremioId = premioId;
+        await guardarDatosNino();
+        render();
+    }
+
+    // CRUD Niños
+    async function agregarNino(nombre, avatar) {
+        if (!nombre) return mostrar("Nombre requerido", false);
+        const nuevo = {
+            id: Date.now().toString(),
+            nombre: nombre.trim(),
+            avatar: avatar || "👶",
+            puntos: 0, totalGanado: 0, totalPerdido: 0, totalCanjeado: 0, totalReconocimiento: 0,
+            historial: [],
+            metaPremioId: null
+        };
+        ninos.push(nuevo);
+        await db.collection('ninios').doc(nuevo.id).set(nuevo);
+        await db.collection('global').doc('datos').set({ ninos });
+        if (!ninoSeleccionado) ninoSeleccionado = nuevo;
+        render();
+    }
+    async function eliminarNino(id) {
+        if (confirm("Eliminar niño? perderá sus puntos")) {
+            ninos = ninos.filter(n => n.id !== id);
+            await db.collection('ninios').doc(id).delete();
+            await db.collection('global').doc('datos').set({ ninos });
+            if (ninoSeleccionado?.id === id) ninoSeleccionado = ninos[0] || null;
+            render();
+        }
+    }
+    async function editarNino(id, nuevoNombre, nuevoAvatar) {
+        const nino = ninos.find(n => n.id === id);
+        if (nino) {
+            nino.nombre = nuevoNombre;
+            nino.avatar = nuevoAvatar;
+            await guardarDatosNino();
+            if (ninoSeleccionado?.id === id) ninoSeleccionado = nino;
+            render();
+        }
+    }
+
+    // CRUD Tareas / Premios
+    async function agregarTarea(nombre, puntos) { if (!nombre || puntos<=0) return; tareas.push({ id: Date.now(), nombre, puntos: parseInt(puntos) }); ordenarTareas(); await guardarConfiguracion(); render(); }
+    async function editarTarea(id, nuevoNombre, nuevosPuntos) { let t = tareas.find(t=>t.id===id); if(t){ t.nombre=nuevoNombre; t.puntos=nuevosPuntos; ordenarTareas(); await guardarConfiguracion(); render(); } }
+    async function eliminarTarea(id) { tareas = tareas.filter(t=>t.id!==id); ordenarTareas(); await guardarConfiguracion(); render(); }
+    async function agregarPremio(nombre, costo) { if (!nombre || costo<=0) return; premios.push({ id: Date.now(), nombre, costo: parseInt(costo) }); ordenarPremios(); await guardarConfiguracion(); render(); }
+    async function editarPremio(id, nuevoNombre, nuevoCosto) { let p = premios.find(p=>p.id===id); if(p){ p.nombre=nuevoNombre; p.costo=nuevoCosto; ordenarPremios(); await guardarConfiguracion(); render(); } }
+    async function eliminarPremio(id) { premios = premios.filter(p=>p.id!==id); ordenarPremios(); await guardarConfiguracion(); render(); }
+    async function editarUsuario(uid, nuevosDatos) { await db.collection('users').doc(uid).update(nuevosDatos); if(currentUser && currentUser.uid===uid){ currentUserData={...currentUserData,...nuevosDatos}; isAdmin=nuevosDatos.isAdmin!==undefined?nuevosDatos.isAdmin:isAdmin; } render(); }
+
+    // Gráfica diaria (CORREGIDA zona horaria)
+    function prepararDatosGrafica(nino) {
+        if (!nino || !nino.historial) return { labels: [], datos: [] };
+        const hoy = new Date();
+        const colombiaOffset = -5 * 60;
+        const localOffset = hoy.getTimezoneOffset();
+        const diff = colombiaOffset - localOffset;
+        const hoyCol = new Date(hoy.getTime() + diff * 60 * 1000);
+        const ultimos7 = [];
+        for (let i = 6; i >= 0; i--) {
+            const fecha = new Date(hoyCol);
+            fecha.setDate(hoyCol.getDate() - i);
+            fecha.setHours(0,0,0,0);
+            const fechaStr = fecha.toISOString().split('T')[0];
+            ultimos7.push({ fecha: fechaStr, puntos: 0 });
+        }
+        nino.historial.forEach(h => {
+            let fechaEvento;
+            if (h.timestamp) fechaEvento = new Date(h.timestamp);
+            else if (h.fecha) fechaEvento = new Date(h.fecha);
+            else return;
+            const fechaEventoCol = new Date(fechaEvento.getTime() + diff * 60 * 1000);
+            fechaEventoCol.setHours(0,0,0,0);
+            const fechaStr = fechaEventoCol.toISOString().split('T')[0];
+            const idx = ultimos7.findIndex(d => d.fecha === fechaStr);
+            if (idx !== -1) ultimos7[idx].puntos += h.puntos;
+        });
+        return { labels: ultimos7.map(d => d.fecha.slice(5)), datos: ultimos7.map(d => d.puntos) };
+    }
+
+    // ---------- PANTALLA LOGIN ----------
+    function renderLogin() {
+        document.getElementById('root').innerHTML = `
+            <div style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
+                <div class="card" style="max-width:400px;">
+                    <div style="font-size: 64px; text-align:center;">⭐</div>
+                    <h2 style="text-align:center; color:#fde68a;">Estrellitas</h2>
+                    <div id="msg" style="margin-bottom:10px;"></div>
+                    <button id="btn-jugar" style="background:#f59e0b; font-size:1.4rem; margin-bottom:20px;">🎮 Jugar ahora</button>
+                    <div style="border-top:1px solid #334155; margin:20px 0;"></div>
+                    <h3>🔐 Iniciar sesión</h3>
+                    <input type="email" id="login-email" placeholder="Correo">
+                    <input type="password" id="login-pass" placeholder="Contraseña">
+                    <button id="btn-login">➡️ Entrar</button>
+                    <details style="margin-top:20px;">
+                        <summary>📝 Crear cuenta nueva</summary>
+                        <input type="text" id="reg-nombre" placeholder="Tu nombre">
+                        <input type="text" id="reg-emoji" placeholder="Emoji" value="👩">
+                        <input type="text" id="reg-rol" placeholder="Rol (Mamá, Papá)">
+                        <input type="email" id="reg-email" placeholder="Correo">
+                        <input type="password" id="reg-pass" placeholder="Contraseña (6+)">
+                        <button id="btn-registro">Crear cuenta</button>
+                    </details>
+                </div>
+            </div>
+        `;
+        document.getElementById('btn-jugar').onclick = async () => {
+            esModoJuego = true; isAdmin = false; currentUser = { uid: 'modoJuego' };
+            await cargarConfiguracion();
+            const globalData = await db.collection('global').doc('datos').get();
+            ninos = globalData.exists ? globalData.data().ninos || [] : [];
+            for (let i=0; i<ninos.length; i++) {
+                const ninoData = await db.collection('ninios').doc(ninos[i].id).get();
+                if (ninoData.exists) ninos[i] = ninoData.data();
+            }
+            if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
+            render();
+        };
+        document.getElementById('btn-login').onclick = async () => {
+            try {
+                await auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-pass').value);
+                location.reload();
+            } catch(e) { mostrar(e.message, false); }
+        };
+        document.getElementById('btn-registro').onclick = async () => {
+            const nombre=document.getElementById('reg-nombre').value, email=document.getElementById('reg-email').value, pass=document.getElementById('reg-pass').value;
+            if(!nombre||!email||!pass) return mostrar("Completa campos", false);
+            if(pass.length<6) return mostrar("Mínimo 6 caracteres", false);
+            try {
+                const result = await auth.createUserWithEmailAndPassword(email, pass);
+                const users = await db.collection('users').get();
+                const esPrimero = users.empty;
+                await db.collection('users').doc(result.user.uid).set({ email, nombre, emoji: document.getElementById('reg-emoji').value||'👤', rol: document.getElementById('reg-rol').value||'Familiar', isAdmin: esPrimero });
+                mostrar(esPrimero? "✅ Eres ADMIN, inicia sesión" : "Cuenta creada, inicia sesión", true);
+                setTimeout(()=>location.reload(),1500);
+            } catch(e){ mostrar(e.message,false); }
+        };
+    }
+
+    // ---------- RENDER PRINCIPAL ----------
+    async function render() {
+        if (!currentUser && !esModoJuego) { renderLogin(); return; }
+
+        let html = `<div id="msg"></div>`;
+        if (ninoSeleccionado) {
+            const stats = ninoSeleccionado;
+            // Botones niños horizontales
+            html += `<div class="nino-buttons">`;
+            ninos.forEach(n => {
+                html += `<button class="tab ${ninoSeleccionado?.id === n.id ? 'tab-active' : ''}" onclick="seleccionarNino('${n.id}')">${n.avatar || '👶'} ${n.nombre} (${n.puntos || 0}⭐)</button>`;
+            });
+            html += `</div>`;
+            // Estrella mejorada
+            html += `<div class="estrella-principal">
+                        <div class="puntos">${stats.puntos || 0}</div>
+                        <div class="estrellita-icono">⭐</div>
+                     </div>`;
+            // Dashboard
+            html += `<div class="dashboard-grid">
+                        <div class="dashboard-card"><div>🏆</div><div style="color:#10b981;">${stats.totalGanado||0}</div><div>Ganadas</div></div>
+                        <div class="dashboard-card"><div>🔻</div><div style="color:#f97316;">${stats.totalPerdido||0}</div><div>Perdidas</div></div>
+                        <div class="dashboard-card"><div>🎁</div><div style="color:#facc15;">${stats.totalCanjeado||0}</div><div>Canjeados</div></div>
+                        <div class="dashboard-card"><div>👍🏻</div><div style="color:#10b981;">${stats.totalReconocimiento||0}</div><div>Reconocimientos</div></div>
+                     </div>`;
+        } else {
+            html += `<div class="card">No hay niños. ${isAdmin? 'Agrega uno en Niños.' : 'Contacta admin.'}</div>`;
+        }
+
+        // Pestañas
+        html += `<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:16px 0;">
+                    <button class="tab ${pantalla==='tareas'?'tab-active':''}" onclick="pantalla='tareas';render()">⭐ Tareas</button>
+                    <button class="tab ${pantalla==='premios'?'tab-active':''}" onclick="pantalla='premios';render()">🎁 Premios</button>
+                    <button class="tab ${pantalla==='historial'?'tab-active':''}" onclick="pantalla='historial';render()">📜 Historial</button>
+                    ${esModoJuego ? `<button class="tab ${pantalla==='meta'?'tab-active':''}" onclick="pantalla='meta';render()">🎯 Meta</button>` : ''}
+                    ${isAdmin ? `<button class="tab ${pantalla==='admin'?'tab-active':''}" onclick="pantalla='admin';render()">🔧 Admin</button>` : ''}
+                    <button class="tab" id="logout-btn">🚪 Salir</button>
+                </div>`;
+
+        // Contenido según pestaña
+        if (pantalla === 'tareas' && ninoSeleccionado) {
+            html += `<div class="card"><h3>📋 Tareas</h3>`;
+            tareas.forEach(t => { html += `<div class="tarea"><span>${t.nombre}</span><button onclick="darPuntos(${t.id})">+${t.puntos}⭐</button></div>`; });
+            html += `<h3>🔻 Quitar puntos</h3>
+                     <div class="tarea quitar-puntos"><span>😠 Mal comportamiento</span><button onclick="quitarPuntos(1,'Mal comportamiento')">-1⭐</button></div>
+                     <div class="tarea quitar-puntos"><span>😤 Berrinche / Incumplir</span><button onclick="quitarPuntos(2,'Berrinche')">-2⭐</button></div>
+                     <div class="tarea quitar-puntos"><span>💢 Acción grave</span><button onclick="quitarPuntos(5,'Acción grave')">-5⭐</button></div>
+                     <div class="flex-row"><input type="number" id="cantidad-custom" placeholder="Cantidad" value="1" style="flex:1"><input type="text" id="motivo-custom" placeholder="Motivo" value="Otro" style="flex:2"><button id="quitar-custom" style="background:#ef4444;">Quitar</button></div>
+                     <h3>👍🏻 Reconocimiento extra (1 vez al día por tipo)</h3>`;
+            const usado1 = await reconocimientoUsadoHoyGlobal(1);
+            const usado2 = await reconocimientoUsadoHoyGlobal(2);
+            const usado3 = await reconocimientoUsadoHoyGlobal(3);
+            html += `<div class="tarea reconocimiento"><span>👍🏻 Buen comportamiento</span><button onclick="darReconocimiento(1)" ${usado1 ? 'disabled' : ''}>+1⭐</button></div>
+                     <div class="tarea reconocimiento"><span>👍🏻👍🏻 Muy bien</span><button onclick="darReconocimiento(2)" ${usado2 ? 'disabled' : ''}>+2⭐</button></div>
+                     <div class="tarea reconocimiento"><span>👍🏻👍🏻👍🏻 Excelente</span><button onclick="darReconocimiento(3)" ${usado3 ? 'disabled' : ''}>+3⭐</button></div>
+                     </div>`;
+        } else if (pantalla === 'tareas' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
+
+        if (pantalla === 'premios' && ninoSeleccionado) {
+            html += `<div class="card"><h3>🎁 Premios (${ninoSeleccionado.puntos||0}⭐)</h3>`;
+            premios.forEach(p => { html += `<div class="tarea"><span>${p.nombre} — ${p.costo}⭐</span><button onclick="canjearPremio(${p.id})" ${(ninoSeleccionado.puntos||0)<p.costo?'disabled':''}>Canjear</button></div>`; });
+            html += `</div>`;
+        } else if (pantalla === 'premios' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
+
+        if (pantalla === 'historial' && ninoSeleccionado) {
+            html += `<div class="card"><h3>📜 Historial de ${ninoSeleccionado.nombre}</h3>`;
+            if ((ninoSeleccionado.historial||[]).length===0) html += `<p>Sin actividad</p>`;
+            else {
+                ninoSeleccionado.historial.forEach(h => {
+                    const autor = h.quien || 'Desconocido';
+                    let icono = h.esReconocimiento ? "👍🏻 " : (h.esCanje ? "🎁 " : (h.puntos>0 ? "✅ " : "🔻 "));
+                    html += `<div class="historial-item"><div><strong>${icono}${h.texto}</strong><br><span style="font-size:10px;">${h.fecha} — por ${autor}</span></div>${isAdmin?`<button class="eliminar-btn" onclick="eliminarEntrada(${h.id})">✕</button>`:''}</div>`;
+                });
+            }
+            html += `</div>`;
+        } else if (pantalla === 'historial' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
+
+        if (pantalla === 'meta' && ninoSeleccionado && esModoJuego) {
+            const metaId = ninoSeleccionado.metaPremioId;
+            const premioMeta = metaId ? premios.find(p=>p.id===metaId) : null;
+            html += `<div class="card"><h3>🎯 Mi Meta</h3>`;
+            if (premioMeta) {
+                const actual = ninoSeleccionado.puntos||0;
+                const falta = Math.max(0, premioMeta.costo - actual);
+                const porc = (actual/premioMeta.costo)*100;
+                html += `<div><strong>${premioMeta.nombre}</strong> (${premioMeta.costo}⭐)</div>
+                         <div class="barra-progreso"><div class="barra-fill" style="width:${Math.min(100,porc)}%"></div></div>
+                         <div>⭐ Tienes ${actual} de ${premioMeta.costo} — te faltan ${falta}⭐</div>
+                         <button onclick="seleccionarMeta(null)" style="background:#ef4444;">Cambiar meta</button>`;
+            } else {
+                html += `<p>Elige un premio como meta:</p>`;
+                premios.forEach(p => { html += `<div class="tarea"><span>${p.nombre} (${p.costo}⭐)</span><button onclick="seleccionarMeta(${p.id})">🎯 Elegir</button></div>`; });
+            }
+            html += `</div>`;
+        }
+
+        if (pantalla === 'admin' && isAdmin) {
+            html += `<div class="card"><h3>🔧 Admin</h3>
+                     <h4>⭐ Tareas</h4><div id="lista-tareas-admin"></div>
+                     <div class="flex-row"><input id="nueva-tarea-nombre" placeholder="Nombre"><input id="nueva-tarea-puntos" type="number" placeholder="Puntos"><button id="agregar-tarea">+</button></div>
+                     <h4>🎁 Premios</h4><div id="lista-premios-admin"></div>
+                     <div class="flex-row"><input id="nuevo-premio-nombre" placeholder="Nombre"><input id="nuevo-premio-costo" type="number" placeholder="Costo"><button id="agregar-premio">+</button></div>
+                     <h4>👥 Usuarios</h4><div id="lista-usuarios"></div>
+                     <h4>📊 Tendencia diaria (${ninoSeleccionado?.nombre||'selecciona niño'})</h4>
+                     <canvas id="graficaDiaria" width="400" height="200" style="background:#0f172a; border-radius:1rem; padding:0.5rem;"></canvas>
+                     </div>`;
+        }
+
+        document.getElementById('root').innerHTML = html;
+
+        // Eventos
+        document.getElementById('logout-btn').onclick = () => { if(esModoJuego){ esModoJuego=false; currentUser=null; renderLogin(); } else auth.signOut().then(()=>location.reload()); };
+        const quitarCustom = document.getElementById('quitar-custom');
+        if(quitarCustom) quitarCustom.onclick = () => quitarPuntos(parseInt(document.getElementById('cantidad-custom').value)||1, document.getElementById('motivo-custom').value||'Otro');
+        const agregarNinoBtn = document.getElementById('agregar-nino');
+        if(agregarNinoBtn) agregarNinoBtn.onclick = () => agregarNino(document.getElementById('nuevo-nino').value, document.getElementById('nuevo-avatar').value);
+
+        if (pantalla === 'admin' && isAdmin) {
+            const tareasDiv = document.getElementById('lista-tareas-admin');
+            if(tareasDiv){
+                tareasDiv.innerHTML='';
+                tareas.forEach(t=>{ tareasDiv.innerHTML+=`<div class="tarea"><input value="${t.nombre.replace(/"/g,'&quot;')}" id="edit-tarea-nombre-${t.id}"><input value="${t.puntos}" id="edit-tarea-puntos-${t.id}" type="number" style="width:70px"><button onclick="editarTarea(${t.id},document.getElementById('edit-tarea-nombre-${t.id}').value,parseInt(document.getElementById('edit-tarea-puntos-${t.id}').value))">💾</button><button onclick="eliminarTarea(${t.id})" style="background:#ef4444;">✕</button></div>`; });
+            }
+            const premiosDiv = document.getElementById('lista-premios-admin');
+            if(premiosDiv){
+                premiosDiv.innerHTML='';
+                premios.forEach(p=>{ premiosDiv.innerHTML+=`<div class="tarea"><input value="${p.nombre.replace(/"/g,'&quot;')}" id="edit-premio-nombre-${p.id}"><input value="${p.costo}" id="edit-premio-costo-${p.id}" type="number" style="width:70px"><button onclick="editarPremio(${p.id},document.getElementById('edit-premio-nombre-${p.id}').value,parseInt(document.getElementById('edit-premio-costo-${p.id}').value))">💾</button><button onclick="eliminarPremio(${p.id})" style="background:#ef4444;">✕</button></div>`; });
+            }
+            document.getElementById('agregar-tarea')?.addEventListener('click',()=>agregarTarea(document.getElementById('nueva-tarea-nombre').value, document.getElementById('nueva-tarea-puntos').value));
+            document.getElementById('agregar-premio')?.addEventListener('click',()=>agregarPremio(document.getElementById('nuevo-premio-nombre').value, document.getElementById('nuevo-premio-costo').value));
+            const usuariosDiv = document.getElementById('lista-usuarios');
+            if(usuariosDiv){
+                const usersSnap = await db.collection('users').get();
+                usuariosDiv.innerHTML='';
+                for(const doc of usersSnap.docs){
+                    const u=doc.data();
+                    usuariosDiv.innerHTML+=`<div class="nino-item" style="flex-direction:column;"><div><span>${u.emoji||'👤'} <strong>${u.nombre}</strong> (${u.rol||'Familiar'})</span> ${u.isAdmin?'👑':''}</div><div class="flex-row"><input id="edit-user-nombre-${doc.id}" value="${u.nombre.replace(/"/g,'&quot;')}"><input id="edit-user-emoji-${doc.id}" value="${u.emoji||'👤'}" style="width:70px"><input id="edit-user-rol-${doc.id}" value="${u.rol||'Familiar'}"><button onclick="editarUsuario('${doc.id}',{nombre:document.getElementById('edit-user-nombre-${doc.id}').value, emoji:document.getElementById('edit-user-emoji-${doc.id}').value, rol:document.getElementById('edit-user-rol-${doc.id}').value})">💾</button>${!u.isAdmin?`<button onclick="editarUsuario('${doc.id}',{isAdmin:true})">👑 Hacer Admin</button>`:''}</div></div>`;
+                }
+            }
+            // Gráfica
+            if(ninoSeleccionado){
+                const {labels, datos} = prepararDatosGrafica(ninoSeleccionado);
+                const ctx = document.getElementById('graficaDiaria')?.getContext('2d');
+                if(ctx){
+                    if(chartInstance) chartInstance.destroy();
+                    chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: { labels, datasets: [{ label: 'Puntos netos del día', data: datos, backgroundColor: '#4f46e5' }] },
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: 'white' } } }, scales: { x: { ticks: { color: 'white' } }, y: { ticks: { color: 'white' } } } }
+                    });
+                }
+            }
+        }
+    }
+
+    // Funciones globales para onclick
+    window.seleccionarNino = (id) => { ninoSeleccionado = ninos.find(n=>n.id===id); render(); };
+    window.darPuntos = darPuntos; window.quitarPuntos = quitarPuntos; window.darReconocimiento = darReconocimiento;
+    window.canjearPremio = canjearPremio; window.eliminarEntrada = eliminarEntrada; window.eliminarNino = eliminarNino;
+    window.editarNino = editarNino; window.agregarTarea = agregarTarea; window.editarTarea = editarTarea;
+    window.eliminarTarea = eliminarTarea; window.agregarPremio = agregarPremio; window.editarPremio = editarPremio;
+    window.eliminarPremio = eliminarPremio; window.editarUsuario = editarUsuario; window.seleccionarMeta = seleccionarMeta;
+    window.mostrarEditarNino = (id) => { let n = ninos.find(n=>n.id===id); if(n){ let nom=prompt("Nuevo nombre:",n.nombre); let av=prompt("Nuevo avatar:",n.avatar); if(nom!==null) editarNino(id,nom,av||n.avatar); } };
+
+    // Inicio
+    auth.onAuthStateChanged(async (user) => {
+        if(user){
+            currentUser=user; esModoJuego=false;
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            isAdmin = userDoc.exists ? userDoc.data().isAdmin : false;
+            currentUserData = userDoc.exists ? userDoc.data() : null;
+            await cargarConfiguracion();
+            const globalData = await db.collection('global').doc('datos').get();
+            ninos = globalData.exists ? globalData.data().ninos || [] : [];
+            for(let i=0;i<ninos.length;i++){
+                const ninoData = await db.collection('ninios').doc(ninos[i].id).get();
+                if(ninoData.exists) ninos[i] = ninoData.data();
+            }
+            if(ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
+            render();
+        } else if(!esModoJuego) renderLogin();
+        else { await cargarConfiguracion(); render(); }
+    });
+</script>
+</body>
+</html>
