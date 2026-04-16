@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Estrellitas</title>
+    <title>Estrellitas - Fase 3 + Ruleta</title>
     <style>
         /* Variables modo oscuro/claro automático */
         :root {
@@ -458,14 +458,26 @@
         await marcarReconocimientoUsadoGlobal(cantidad);
         mostrar(`👍🏻 +${cantidad}⭐ para ${ninoSeleccionado.nombre}`);
     }
-    async function canjearPremio(idPremio) {
+    async function canjearPremio(idPremio, usarGolden = false) {
         if (!ninoSeleccionado) return mostrar("Selecciona un niño", false);
         const premio = premios.find(p => p.id === idPremio);
         if (!premio) return;
-        if ((ninoSeleccionado.puntos || 0) >= premio.costo) {
-            await agregarHistorial(`🎁 CANJE: ${premio.nombre} -${premio.costo}⭐`, -premio.costo, true);
-            mostrar(`¡${ninoSeleccionado.nombre} canjeó ${premio.nombre}!`);
-        } else mostrar(`Faltan ${premio.costo - ninoSeleccionado.puntos}⭐`, false);
+        if (usarGolden) {
+            if (ninoSeleccionado.goldenTickets >= 5) {
+                ninoSeleccionado.goldenTickets -= 5;
+                await agregarHistorial(`🎫 CANJE GOLDEN: ${premio.nombre} (sin costo de ⭐)`, 0);
+                mostrar(`¡Canjeaste ${premio.nombre} con tus Golden Tickets!`);
+                playSound('canje');
+                render();
+            } else {
+                mostrar("No tienes suficientes Golden Tickets", false);
+            }
+        } else {
+            if ((ninoSeleccionado.puntos || 0) >= premio.costo) {
+                await agregarHistorial(`🎁 CANJE: ${premio.nombre} -${premio.costo}⭐`, -premio.costo, true);
+                mostrar(`¡${ninoSeleccionado.nombre} canjeó ${premio.nombre}!`);
+            } else mostrar(`Faltan ${premio.costo - ninoSeleccionado.puntos}⭐`, false);
+        }
     }
     async function eliminarEntrada(id) {
         if (!ninoSeleccionado) return;
@@ -491,34 +503,157 @@
         render();
     }
 
-    // Ruleta
-    async function girarRuleta() {
-        if (!ninoSeleccionado) return mostrar("Selecciona un niño", false);
-        if (esModoJuego) return mostrar("Modo juego: la ruleta solo para usuarios registrados", false);
-        if ((ninoSeleccionado.puntos || 0) < 5) return mostrar("Necesitas 5⭐ para girar la ruleta", false);
-        await agregarHistorial(`🎡 Giró la ruleta (costo 5⭐)`, -5);
-        const premiosRuleta = [
-            { prob: 0.3, texto: "¡Nada! 😅", puntos: 0 },
-            { prob: 0.3, texto: "+5⭐ extra", puntos: 5 },
-            { prob: 0.2, texto: "+10⭐ extra", puntos: 10 },
-            { prob: 0.1, texto: "+20⭐ extra", puntos: 20 },
-            { prob: 0.05, texto: "¡Premio doble! +30⭐", puntos: 30 },
-            { prob: 0.05, texto: "¡JACKPOT! +50⭐", puntos: 50 }
-        ];
-        let rand = Math.random();
-        let acum = 0;
-        let resultado = premiosRuleta[0];
-        for (let p of premiosRuleta) {
-            acum += p.prob;
-            if (rand <= acum) { resultado = p; break; }
+    // ---------- RULETA VISUAL CON PESOS Y MODO JUEGO ----------
+    let ruletaAngulo = 0;
+    let ruletaGirando = false;
+
+    // Segmentos con pesos ajustados (más estrechos: Golden Ticket, +50 y los dos 0)
+    const segmentosRuleta = [
+        { texto: "0⭐", puntos: 0, peso: 1, color: "#ef4444", tipo: "cero" },
+        { texto: "0⭐", puntos: 0, peso: 1, color: "#ef4444", tipo: "cero" },
+        { texto: "+50⭐", puntos: 50, peso: 0.8, color: "#ec489a", tipo: "puntos" },
+        { texto: "🎫 Ticket", puntos: 0, peso: 1.2, color: "#a855f7", tipo: "ticket" },
+        { texto: "🔄 Otra vez", puntos: 0, peso: 2, color: "#f59e0b", tipo: "replay" },
+        { texto: "+20⭐", puntos: 20, peso: 2, color: "#10b981", tipo: "puntos" },
+        { texto: "+10⭐", puntos: 10, peso: 3, color: "#3b82f6", tipo: "puntos" },
+        { texto: "+10⭐", puntos: 10, peso: 3, color: "#3b82f6", tipo: "puntos" }
+    ];
+
+    function dibujarRuleta(ctx, width, height, anguloActual) {
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.min(width, height) / 2 - 10;
+        
+        const totalPeso = segmentosRuleta.reduce((sum, s) => sum + s.peso, 0);
+        let anguloAcumulado = anguloActual;
+        for (let s of segmentosRuleta) {
+            const anguloSegmento = (s.peso / totalPeso) * Math.PI * 2;
+            const start = anguloAcumulado;
+            const end = start + anguloSegmento;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, start, end);
+            ctx.fillStyle = s.color;
+            ctx.fill();
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(start + anguloSegmento / 2);
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${Math.max(10, radius / 12)}px "Segoe UI"`;
+            ctx.shadowBlur = 0;
+            let textoMostrar = s.texto;
+            if (s.texto === "🎫 Ticket") textoMostrar = "🎫";
+            else if (s.texto === "🔄 Otra vez") textoMostrar = "🔄";
+            ctx.fillText(textoMostrar, radius * 0.65, 6);
+            ctx.restore();
+            anguloAcumulado = end;
         }
-        if (resultado.puntos > 0) await agregarHistorial(`🎉 Ruleta: ${resultado.texto}`, resultado.puntos);
-        else await agregarHistorial(`🎲 Ruleta: ${resultado.texto}`, 0);
-        mostrar(`Ruleta: ${resultado.texto}`);
-        const btn = document.querySelector('.ruleta-btn');
-        if (btn) btn.classList.add('girando');
-        setTimeout(() => { if(btn) btn.classList.remove('girando'); }, 500);
-        render();
+        // Flecha indicadora
+        ctx.beginPath();
+        ctx.moveTo(centerX + radius + 10, centerY);
+        ctx.lineTo(centerX + radius + 20, centerY - 8);
+        ctx.lineTo(centerX + radius + 20, centerY + 8);
+        ctx.fillStyle = '#facc15';
+        ctx.fill();
+    }
+
+    function girarRuletaVisual() {
+        if (ruletaGirando) return;
+        if (!ninoSeleccionado) return mostrar("Selecciona un niño", false);
+        
+        const esModoJuegoLocal = esModoJuego;
+        if (!esModoJuegoLocal && (ninoSeleccionado.puntos || 0) < 5) {
+            return mostrar("Necesitas 5⭐ para girar la ruleta (en modo real)", false);
+        }
+        
+        ruletaGirando = true;
+        const canvas = document.getElementById('canvasRuleta');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width, height = canvas.height;
+        
+        const vueltas = 5 + Math.random() * 5; // 5 a 10 vueltas
+        const anguloFinal = ruletaAngulo + (vueltas * Math.PI * 2);
+        const duracion = 1800;
+        const startTime = performance.now();
+        const startAngulo = ruletaAngulo;
+        
+        function animar(ahora) {
+            const elapsed = ahora - startTime;
+            let t = Math.min(1, elapsed / duracion);
+            t = 1 - Math.pow(1 - t, 3);
+            const anguloActual = startAngulo + (anguloFinal - startAngulo) * t;
+            ruletaAngulo = anguloActual;
+            dibujarRuleta(ctx, width, height, anguloActual);
+            if (t < 1) {
+                requestAnimationFrame(animar);
+            } else {
+                // Determinar segmento
+                const totalPeso = segmentosRuleta.reduce((sum, s) => sum + s.peso, 0);
+                let anguloRelativo = (ruletaAngulo + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+                let anguloAcum = 0;
+                let idx = -1;
+                for (let i = 0; i < segmentosRuleta.length; i++) {
+                    const anguloSeg = (segmentosRuleta[i].peso / totalPeso) * Math.PI * 2;
+                    if (anguloRelativo >= anguloAcum && anguloRelativo < anguloAcum + anguloSeg) {
+                        idx = i;
+                        break;
+                    }
+                    anguloAcum += anguloSeg;
+                }
+                if (idx === -1) idx = 0;
+                const resultado = segmentosRuleta[idx];
+                ruletaGirando = false;
+                
+                // Aplicar efecto según modo
+                if (!esModoJuegoLocal) {
+                    // Restar costo de 5 puntos
+                    agregarHistorial(`🎡 Ruleta: giró (costo 5⭐)`, -5);
+                }
+                
+                if (resultado.tipo === "puntos" && resultado.puntos > 0) {
+                    if (!esModoJuegoLocal) {
+                        agregarHistorial(`🎉 Ruleta: ${resultado.texto}`, resultado.puntos);
+                        mostrar(`¡${resultado.texto} para ${ninoSeleccionado.nombre}!`);
+                        playSound('puntos');
+                    } else {
+                        mostrar(`🎉 ¡Modo juego: ${resultado.texto}! (no se guarda)`);
+                    }
+                } 
+                else if (resultado.tipo === "replay") {
+                    if (!esModoJuegoLocal) {
+                        mostrar(`🔄 ¡Gira otra vez! (sin costo adicional)`);
+                        setTimeout(() => girarRuletaVisual(), 500);
+                    } else {
+                        mostrar(`🔄 Modo juego: gira otra vez`);
+                        setTimeout(() => girarRuletaVisual(), 500);
+                    }
+                }
+                else if (resultado.tipo === "ticket") {
+                    if (!esModoJuegoLocal) {
+                        if (!ninoSeleccionado.goldenTickets) ninoSeleccionado.goldenTickets = 0;
+                        ninoSeleccionado.goldenTickets++;
+                        agregarHistorial(`🎫 Golden Ticket conseguido (total: ${ninoSeleccionado.goldenTickets})`, 0);
+                        mostrar(`🎫 ¡Golden Ticket! Llevas ${ninoSeleccionado.goldenTickets}. Con 5 puedes canjear cualquier premio gratis.`);
+                        if (ninoSeleccionado.goldenTickets >= 5) {
+                            mostrar(`✨ ¡Tienes 5 Golden Tickets! Ve a la pestaña Premios y canjea lo que quieras sin gastar ⭐.`, true);
+                        }
+                        playSound('logro');
+                    } else {
+                        mostrar(`🎫 Modo juego: ¡Golden Ticket! (no se acumula en la realidad)`);
+                    }
+                }
+                else {
+                    if (!esModoJuegoLocal) {
+                        mostrar(`${resultado.texto}... ¡suerte la próxima!`);
+                    } else {
+                        mostrar(`Modo juego: ${resultado.texto}`);
+                    }
+                }
+                render(); // refrescar interfaz
+            }
+        }
+        requestAnimationFrame(animar);
     }
 
     // Calendario de actividad (mes actual)
@@ -616,7 +751,7 @@
             nombre: nombre.trim(),
             avatar: avatar || "👶",
             puntos: 0, totalGanado: 0, totalPerdido: 0, totalCanjeado: 0, totalReconocimiento: 0,
-            historial: [], metaPremioId: null, mejorRacha: 0, tareasRecurrentes: {}
+            historial: [], metaPremioId: null, mejorRacha: 0, tareasRecurrentes: {}, goldenTickets: 0
         };
         ninos.push(nuevo);
         await db.collection('ninios').doc(nuevo.id).set(nuevo);
@@ -683,6 +818,7 @@
                 if (nd.exists) ninos[i] = nd.data();
                 if (!ninos[i].mejorRacha) ninos[i].mejorRacha = 0;
                 if (!ninos[i].tareasRecurrentes) ninos[i].tareasRecurrentes = {};
+                if (ninos[i].goldenTickets === undefined) ninos[i].goldenTickets = 0;
                 recalcularStats(ninos[i]);
             }
             if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
@@ -742,6 +878,7 @@
                     <button class="tab ${pantalla === 'premios' ? 'tab-active' : ''}" onclick="pantalla='premios';render()">🎁 Premios</button>
                     <button class="tab ${pantalla === 'historial' ? 'tab-active' : ''}" onclick="pantalla='historial';render()">📜 Historial</button>
                     <button class="tab ${pantalla === 'logros' ? 'tab-active' : ''}" onclick="pantalla='logros';render()">🏅 Logros</button>
+                    ${!esModoJuego ? `<button class="tab ${pantalla === 'ruleta' ? 'tab-active' : ''}" onclick="pantalla='ruleta';render()">🎡 Ruleta</button>` : ''}
                     ${isAdmin ? `<button class="tab ${pantalla === 'admin' ? 'tab-active' : ''}" onclick="pantalla='admin';render()">🔧 Admin</button>` : ''}
                     <button class="tab" id="logout-btn">🚪 Salir</button>
                 </div>`;
@@ -764,12 +901,22 @@
             html += `<div class="tarea reconocimiento"><span>👍🏻 Bueno</span><button onclick="darReconocimiento(1)" ${u1 ? 'disabled' : ''}>+1⭐</button></div>
                      <div class="tarea reconocimiento"><span>👍🏻👍🏻 Muy bien</span><button onclick="darReconocimiento(2)" ${u2 ? 'disabled' : ''}>+2⭐</button></div>
                      <div class="tarea reconocimiento"><span>👍🏻👍🏻👍🏻 Excelente</span><button onclick="darReconocimiento(3)" ${u3 ? 'disabled' : ''}>+3⭐</button></div>
-                     <div class="ruleta-container"><button class="ruleta-btn" onclick="girarRuleta()">🎡 Girar ruleta (cuesta 5⭐)</button></div>
                      </div>`;
         } else if (pantalla === 'tareas' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
 
         if (pantalla === 'premios' && ninoSeleccionado) {
-            html += `<div class="card"><h3>🎁 Premios (${ninoSeleccionado.puntos || 0}⭐)</h3>${premios.map(p => `<div class="tarea"><span>${p.nombre} — ${p.costo}⭐</span><button onclick="canjearPremio(${p.id})" ${(ninoSeleccionado.puntos || 0) < p.costo ? 'disabled' : ''}>Canjear</button></div>`).join('')}</div>`;
+            html += `<div class="card"><h3>🎁 Premios (${ninoSeleccionado.puntos || 0}⭐)</h3>${premios.map(p => `<div class="tarea"><span>${p.nombre} — ${p.costo}⭐</span><button onclick="canjearPremio(${p.id}, false)" ${(ninoSeleccionado.puntos || 0) < p.costo ? 'disabled' : ''}>Canjear</button></div>`).join('')}`;
+            if (ninoSeleccionado.goldenTickets >= 5 && !esModoJuego) {
+                html += `<div class="card" style="margin-top: 1rem; background: #a855f7;">
+                            <h3>🎫 Canje Especial con Golden Tickets</h3>
+                            <p>Tienes ${ninoSeleccionado.goldenTickets} Golden Tickets. ¡Puedes canjear CUALQUIER premio sin gastar estrellas!</p>
+                            <div class="tarea"><span>✨ Elige un premio gratuito ✨</span>
+                            <select id="goldenPremioSelect">${premios.map(p => `<option value="${p.id}">${p.nombre} (normalmente ${p.costo}⭐)</option>`).join('')}</select>
+                            <button id="canjearGoldenBtn">🎫 Canjear con Golden Ticket (gasta 5 tickets)</button>
+                            </div>
+                         </div>`;
+            }
+            html += `</div>`;
         } else if (pantalla === 'premios' && !ninoSeleccionado) html += `<div class="card"><p>Selecciona un niño</p></div>`;
 
         if (pantalla === 'historial' && ninoSeleccionado) {
@@ -782,8 +929,19 @@
         if (pantalla === 'logros' && ninoSeleccionado) {
             html += `<div class="card"><h3>🏅 Logros de ${ninoSeleccionado.nombre}</h3><ul style="text-align:left;">`;
             (ninoSeleccionado.logros || []).forEach(l => html += `<li>${l}</li>`);
-            if (!ninoSeleccionado.logros?.length) html += `<li>Sin logros aún. ¡Sigue así!</li>`;
+            if (ninoSeleccionado.goldenTickets >= 5) html += `<li>🎫 ¡Coleccionista de Golden Tickets!</li>`;
+            if (!ninoSeleccionado.logros?.length && ninoSeleccionado.goldenTickets < 5) html += `<li>Sin logros aún. ¡Sigue así!</li>`;
             html += `</ul></div>`;
+        }
+
+        if (pantalla === 'ruleta' && ninoSeleccionado && !esModoJuego) {
+            html += `<div class="card">
+                        <h3>🎡 Ruleta de Premios</h3>
+                        <p>Cuesta 5⭐ girar. ¡Puedes ganar hasta 50⭐ extra!</p>
+                        <canvas id="canvasRuleta" width="300" height="300" style="margin: 0 auto; display: block; max-width: 100%; height: auto; background: #1e293b; border-radius: 50%;"></canvas>
+                        <button id="girarRuletaBtn" class="ruleta-btn" style="margin-top: 1rem;">🎲 Girar ruleta</button>
+                        <p style="margin-top: 0.5rem;">Tienes ${ninoSeleccionado.puntos || 0}⭐ | Golden Tickets: ${ninoSeleccionado.goldenTickets || 0}</p>
+                     </div>`;
         }
 
         if (pantalla === 'admin' && isAdmin) {
@@ -808,6 +966,26 @@
         document.getElementById('logout-btn').onclick = () => { if (esModoJuego) { esModoJuego = false; currentUser = null; renderLogin(); } else auth.signOut().then(() => location.reload()); };
         const quitarCustom = document.getElementById('quitar-custom'); if (quitarCustom) quitarCustom.onclick = () => quitarPuntos(parseInt(document.getElementById('cantidad-custom').value) || 1, document.getElementById('motivo-custom').value || 'Otro');
         const agregarNinoBtn = document.getElementById('agregar-nino'); if (agregarNinoBtn) agregarNinoBtn.onclick = () => agregarNino(document.getElementById('nuevo-nino').value, document.getElementById('nuevo-avatar').value);
+        
+        // Ruleta visual
+        if (pantalla === 'ruleta' && ninoSeleccionado && !esModoJuego) {
+            const canvas = document.getElementById('canvasRuleta');
+            if (canvas) {
+                canvas.width = 300;
+                canvas.height = 300;
+                const ctx = canvas.getContext('2d');
+                dibujarRuleta(ctx, canvas.width, canvas.height, ruletaAngulo);
+                document.getElementById('girarRuletaBtn').onclick = () => girarRuletaVisual();
+            }
+        }
+
+        // Canje con Golden Tickets
+        if (pantalla === 'premios' && document.getElementById('canjearGoldenBtn')) {
+            document.getElementById('canjearGoldenBtn').onclick = async () => {
+                const premioId = parseInt(document.getElementById('goldenPremioSelect').value);
+                await canjearPremio(premioId, true);
+            };
+        }
 
         if (pantalla === 'admin' && isAdmin) {
             const tareasDiv = document.getElementById('lista-tareas-admin');
@@ -831,7 +1009,7 @@
                     usuariosDiv.innerHTML += `<div class="nino-item"><div>${u.emoji || '👤'} <strong>${u.nombre}</strong> (${u.rol || 'Familiar'}) ${u.isAdmin ? '👑' : ''}</div><div class="flex-row"><input id="edit-user-nombre-${doc.id}" value="${u.nombre.replace(/"/g, '&quot;')}"><input id="edit-user-emoji-${doc.id}" value="${u.emoji || '👤'}" style="width:70px"><input id="edit-user-rol-${doc.id}" value="${u.rol || 'Familiar'}"><button onclick="editarUsuario('${doc.id}',{nombre:document.getElementById('edit-user-nombre-${doc.id}').value, emoji:document.getElementById('edit-user-emoji-${doc.id}').value, rol:document.getElementById('edit-user-rol-${doc.id}').value})">💾</button>${!u.isAdmin ? `<button onclick="editarUsuario('${doc.id}',{isAdmin:true})">👑 Admin</button>` : ''}</div></div>`;
                 }
             }
-            // Gráfica (Fase 3)
+            // Gráfica
             if (ninoSeleccionado) {
                 const filtro = document.getElementById('filtro-grafica')?.value || 'semana';
                 const { labels, datos } = prepararDatosGrafica(ninoSeleccionado, filtro);
@@ -840,27 +1018,8 @@
                     if (chartInstance) chartInstance.destroy();
                     chartInstance = new Chart(ctx, {
                         type: 'bar',
-                        data: {
-                            labels: labels,
-                            datasets: [{
-                                label: 'Puntos netos del día',
-                                data: datos,
-                                backgroundColor: '#4f46e5',
-                                borderRadius: 8
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: {
-                                legend: { labels: { color: 'var(--text-color)' } },
-                                tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ⭐` } }
-                            },
-                            scales: {
-                                x: { ticks: { color: 'var(--text-color)' }, grid: { color: 'var(--border-color)' } },
-                                y: { ticks: { color: 'var(--text-color)' }, grid: { color: 'var(--border-color)' }, title: { display: true, text: '⭐', color: 'var(--text-color)' } }
-                            }
-                        }
+                        data: { labels, datasets: [{ label: 'Puntos netos del día', data: datos, backgroundColor: '#4f46e5', borderRadius: 8 }] },
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: 'var(--text-color)' } }, tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ⭐` } } }, scales: { x: { ticks: { color: 'var(--text-color)' }, grid: { color: 'var(--border-color)' } }, y: { ticks: { color: 'var(--text-color)' }, grid: { color: 'var(--border-color)' }, title: { display: true, text: '⭐', color: 'var(--text-color)' } } } }
                     });
                 }
                 const filtroSelect = document.getElementById('filtro-grafica');
@@ -879,8 +1038,7 @@
     window.editarNino = editarNino; window.agregarTarea = agregarTarea; window.editarTarea = editarTarea;
     window.eliminarTarea = eliminarTarea; window.agregarPremio = agregarPremio; window.editarPremio = editarPremio;
     window.eliminarPremio = eliminarPremio; window.editarUsuario = editarUsuario;
-    window.exportarCSV = exportarCSV; window.copiarCSV = copiarCSV; window.girarRuleta = girarRuleta;
-    window.toggleTareaRecurrente = toggleTareaRecurrente;
+    window.exportarCSV = exportarCSV; window.copiarCSV = copiarCSV;
     window.mostrarMensajeMascota = () => { mostrar(`¡${ninoSeleccionado?.mascota || '🐣'} te acompaña! Sigue así`, true); };
 
     // Inicialización
@@ -898,6 +1056,7 @@
                 if (nd.exists) ninos[i] = nd.data();
                 if (!ninos[i].mejorRacha) ninos[i].mejorRacha = 0;
                 if (!ninos[i].tareasRecurrentes) ninos[i].tareasRecurrentes = {};
+                if (ninos[i].goldenTickets === undefined) ninos[i].goldenTickets = 0;
                 recalcularStats(ninos[i]);
             }
             if (ninos.length && !ninoSeleccionado) ninoSeleccionado = ninos[0];
